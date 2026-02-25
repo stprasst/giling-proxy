@@ -1,12 +1,24 @@
 package main
 
 import (
-	"fmt"
+	"context"
 	"log"
+	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"github.com/gin-contrib/sessions"
+	"github.com/gin-contrib/sessions/cookie"
+	"github.com/gin-gonic/gin"
 
 	"proxy-checker/internal/config"
 	"proxy-checker/internal/database"
+	"proxy-checker/internal/handlers"
+	"proxy-checker/internal/middleware"
+	"proxy-checker/internal/scheduler"
+	"proxy-checker/internal/services"
 )
 
 func main() {
@@ -35,16 +47,137 @@ func main() {
 
 	log.Printf("Migrations completed")
 
-	// Ensure data/public directory exists for proxy_alive.txt export
+	// Create initial admin user
+	if err := handlers.SetupInitialUser(db, cfg.AdminPassword); err != nil {
+		log.Fatalf("Failed to create admin user: %v", err)
+	}
+
+	log.Printf("Admin user initialized")
+
+	// Initialize services
+	checker := services.NewProxyChecker(cfg)
+	pool := services.NewWorkerPool(cfg.WorkerCount, checker)
+	scraper := services.NewScraper()
+	exporter := services.NewExporter(db, "data")
+
+	// Initialize handlers
+	authHandler := handlers.NewAuthHandler(db)
+	dashboardHandler := handlers.NewDashboardHandler(db)
+	proxyHandler := handlers.NewProxyHandler(db, scraper, exporter)
+	sourceHandler := handlers.NewSourceHandler(db, scraper)
+	statsHandler := handlers.NewStatsHandler(db)
+
+	// Initialize scheduler
+	sched := scheduler.NewScheduler(db, cfg, checker, pool, scraper, exporter)
+	if err := sched.SetupJobs(); err != nil {
+		log.Fatalf("Failed to setup scheduler: %v", err)
+	}
+
+	checkHandler := handlers.NewCheckHandler(sched)
+
+	// Setup Gin router
+	gin.SetMode(gin.ReleaseMode)
+	r := gin.New()
+	r.Use(gin.Logger())
+	r.Use(gin.Recovery())
+
+	// Session middleware
+	store := cookie.NewStore([]byte(cfg.SessionSecret))
+	store.Options(sessions.Options{
+		MaxAge:   86400,
+		HttpOnly: true,
+		Path:     "/",
+	})
+	r.Use(sessions.Sessions("proxy-checker", store))
+
+	// Load templates
+	r.LoadHTMLGlob("templates/*")
+
+	// Static files
+	r.Static("/static", "./static")
+	r.Static("/public", "./data/public")
+
+	// Public routes
+	r.GET("/login", authHandler.ShowLogin)
+	r.POST("/login", authHandler.Login)
+	r.GET("/logout", authHandler.Logout)
+
+	// Protected routes
+	admin := r.Group("/admin")
+	admin.Use(middleware.AuthRequired())
+	{
+		admin.GET("/dashboard", dashboardHandler.ShowDashboard)
+	}
+
+	api := r.Group("/api")
+	api.Use(middleware.AuthRequired())
+	{
+		// Proxy routes
+		api.POST("/proxies/bulk", proxyHandler.BulkAdd)
+		api.POST("/proxies/fetch", proxyHandler.FetchFromURL)
+		api.GET("/proxies", proxyHandler.List)
+		api.DELETE("/proxies/:id", proxyHandler.Delete)
+		api.POST("/export", proxyHandler.Export)
+
+		// Source routes
+		api.POST("/sources", sourceHandler.Create)
+		api.GET("/sources", sourceHandler.List)
+		api.DELETE("/sources/:id", sourceHandler.Delete)
+		api.POST("/sources/:id/refresh", sourceHandler.Refresh)
+
+		// Stats routes
+		api.GET("/stats", statsHandler.GetStats)
+		api.GET("/logs", statsHandler.GetLogs)
+
+		// Check routes
+		api.POST("/check/trigger", checkHandler.Trigger)
+	}
+
+	// Root redirect
+	r.GET("/", func(c *gin.Context) {
+		c.Redirect(http.StatusFound, "/login")
+	})
+
+	// Ensure data directories exist
 	if err := os.MkdirAll("data/public", 0755); err != nil {
 		log.Fatalf("Failed to create public directory: %v", err)
 	}
 
-	// TODO: Phase 3 - Initialize Gin server, handlers, scheduler
-	// For now, just verify setup works
-	fmt.Println("\n✓ Phase 1 Complete: Database setup verified")
-	fmt.Println("  - Database: data/proxy.db")
-	fmt.Println("  - Tables: migrations, users, proxies, sources, check_logs")
-	fmt.Println("  - WAL mode: enabled")
-	fmt.Println("\nNext: Run 'go mod tidy' then 'go build' to verify compilation")
+	// Start scheduler
+	sched.Start()
+	defer sched.Stop()
+
+	// Start server
+	srv := &http.Server{
+		Addr:    ":" + cfg.Port,
+		Handler: r,
+	}
+
+	// Graceful shutdown
+	go func() {
+		log.Printf("Server starting on port %s", cfg.Port)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Server error: %v", err)
+		}
+	}()
+
+	// Wait for interrupt signal
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	log.Println("Shutting down server...")
+
+	// Stop scheduler first
+	sched.Stop()
+
+	// Shutdown HTTP server with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Printf("Server shutdown error: %v", err)
+	}
+
+	log.Println("Server stopped")
 }
