@@ -4,3 +4,25 @@ docs/
 plans/
 .idea/
 .mcp.json
+
+# Database
+*.db
+*.db-shm
+*.db-wal
+data/
+
+# Logs
+*.log
+server.log
+
+# Build artifacts
+*.exe
+*.tar.gz
+
+# Environment
+.env
+
+# Deploy artifacts
+deploy/
+proxy-checker/deploy/
+proxy-checker-deploy.tar.gz
