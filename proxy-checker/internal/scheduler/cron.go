@@ -78,6 +78,11 @@ func (s *Scheduler) SetupJobs() error {
 		s.checkTimeout = timeout
 	}
 
+	// Update initial next_check time so countdown displays correctly
+	s.mu.Lock()
+	s.nextCheck = time.Now().Add(s.checkInterval)
+	s.mu.Unlock()
+
 	// Job 1: Re-check alive proxies every check_interval (default 15 min)
 	checkCronExpr := "@every " + s.checkInterval.String()
 	_, err := s.cron.AddFunc(checkCronExpr, func() {
