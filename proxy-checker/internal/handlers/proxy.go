@@ -60,16 +60,17 @@ func (h *ProxyHandler) BulkAdd(c *gin.Context) {
 	}
 
 	// Insert proxies
-	inserted, err := database.InsertProxiesBatch(h.db, proxies, req.SourceType, "")
+	inserted, duplicates, err := database.InsertProxiesBatch(h.db, proxies, req.SourceType, "")
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"success":  true,
-		"inserted": inserted,
-		"total":    len(proxies),
+		"success":    true,
+		"inserted":   inserted,
+		"duplicates": duplicates,
+		"total":      len(proxies),
 	})
 }
 
@@ -111,16 +112,17 @@ func (h *ProxyHandler) FetchFromURL(c *gin.Context) {
 	}
 
 	// Insert proxies
-	inserted, err := database.InsertProxiesBatch(h.db, proxyList, database.SourceTypeURL, req.URL)
+	inserted, duplicates, err := database.InsertProxiesBatch(h.db, proxyList, database.SourceTypeURL, req.URL)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"success":      true,
-		"fetched":      len(proxies),
-		"inserted":     inserted,
+		"success":       true,
+		"fetched":       len(proxies),
+		"inserted":      inserted,
+		"duplicates":    duplicates,
 		"self_included": len(selfProxies),
 	})
 }
@@ -130,6 +132,7 @@ func (h *ProxyHandler) List(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
 	status := c.Query("status")
+	proxyType := c.Query("type")
 
 	if page < 1 {
 		page = 1
@@ -138,7 +141,7 @@ func (h *ProxyHandler) List(c *gin.Context) {
 		limit = 50
 	}
 
-	proxies, total, err := database.GetProxies(h.db, page, limit, status)
+	proxies, total, err := database.GetProxiesFiltered(h.db, page, limit, status, proxyType)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

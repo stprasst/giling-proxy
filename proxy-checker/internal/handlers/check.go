@@ -26,3 +26,12 @@ func (h *CheckHandler) Trigger(c *gin.Context) {
 		"message": "Check triggered",
 	})
 }
+
+// Status returns the scheduler status including next check time
+func (h *CheckHandler) Status(c *gin.Context) {
+	status := h.scheduler.GetStatus()
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    status,
+	})
+}

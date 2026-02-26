@@ -3,18 +3,20 @@ package database
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 )
 
 // InsertProxiesBatch inserts multiple proxies, ignoring duplicates
-func InsertProxiesBatch(db *sql.DB, proxies []Proxy, sourceType, sourceURL string) (int, error) {
+// Returns: (inserted count, duplicate count, error)
+func InsertProxiesBatch(db *sql.DB, proxies []Proxy, sourceType, sourceURL string) (int, int, error) {
 	if len(proxies) == 0 {
-		return 0, nil
+		return 0, 0, nil
 	}
 
 	tx, err := db.Begin()
 	if err != nil {
-		return 0, fmt.Errorf("failed to begin transaction: %w", err)
+		return 0, 0, fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	defer tx.Rollback()
 
@@ -23,29 +25,32 @@ func InsertProxiesBatch(db *sql.DB, proxies []Proxy, sourceType, sourceURL strin
 		VALUES (?, ?, ?, ?, ?, ?)
 	`)
 	if err != nil {
-		return 0, fmt.Errorf("failed to prepare statement: %w", err)
+		return 0, 0, fmt.Errorf("failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
 
 	now := time.Now()
 	inserted := 0
+	duplicates := 0
 
 	for _, p := range proxies {
 		result, err := stmt.Exec(p.Address, sourceType, sourceURL, StatusUnchecked, now, now)
 		if err != nil {
-			continue // Skip errors (duplicates handled by INSERT OR IGNORE)
+			continue // Skip errors
 		}
 
 		if rows, _ := result.RowsAffected(); rows > 0 {
 			inserted++
+		} else {
+			duplicates++
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		return 0, fmt.Errorf("failed to commit transaction: %w", err)
+		return 0, 0, fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
-	return inserted, nil
+	return inserted, duplicates, nil
 }
 
 // GetProxies retrieves proxies with pagination
@@ -111,6 +116,74 @@ func GetProxies(db *sql.DB, page, limit int, status string) ([]Proxy, int, error
 	return proxies, total, rows.Err()
 }
 
+// GetProxiesFiltered returns paginated proxies with status and type filtering
+func GetProxiesFiltered(db *sql.DB, page, limit int, status, proxyType string) ([]Proxy, int, error) {
+	offset := (page - 1) * limit
+	if offset < 0 {
+		offset = 0
+	}
+
+	// Build WHERE clause
+	whereClauses := []string{}
+	args := []interface{}{}
+
+	if status != "" {
+		whereClauses = append(whereClauses, "status = ?")
+		args = append(args, status)
+	}
+	if proxyType != "" {
+		whereClauses = append(whereClauses, "type = ?")
+		args = append(args, proxyType)
+	}
+
+	whereClause := ""
+	if len(whereClauses) > 0 {
+		whereClause = " WHERE " + strings.Join(whereClauses, " AND ")
+	}
+
+	// Count query
+	countQuery := "SELECT COUNT(*) FROM proxies" + whereClause
+	var total int
+	if err := db.QueryRow(countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	// Data query
+	query := `
+		SELECT id, address, type, status, latency, country, source_type, source_url,
+		       check_count, fail_count, last_checked, created_at, updated_at
+		FROM proxies
+	` + whereClause + " ORDER BY created_at DESC LIMIT ? OFFSET ?"
+
+	queryArgs := append(args, limit, offset)
+
+	rows, err := db.Query(query, queryArgs...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var proxies []Proxy
+	for rows.Next() {
+		var p Proxy
+		var lastChecked sql.NullTime
+		err := rows.Scan(
+			&p.ID, &p.Address, &p.Type, &p.Status, &p.Latency, &p.Country,
+			&p.SourceType, &p.SourceURL, &p.CheckCount, &p.FailCount,
+			&lastChecked, &p.CreatedAt, &p.UpdatedAt,
+		)
+		if err != nil {
+			return nil, 0, err
+		}
+		if lastChecked.Valid {
+			p.LastChecked = &lastChecked.Time
+		}
+		proxies = append(proxies, p)
+	}
+
+	return proxies, total, rows.Err()
+}
+
 // GetUncheckedProxies retrieves all unchecked proxies
 func GetUncheckedProxies(db *sql.DB) ([]Proxy, error) {
 	query := `
@@ -121,6 +194,42 @@ func GetUncheckedProxies(db *sql.DB) ([]Proxy, error) {
 	`
 
 	rows, err := db.Query(query, StatusUnchecked, StatusDead)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var proxies []Proxy
+	for rows.Next() {
+		var p Proxy
+		var lastChecked sql.NullTime
+		err := rows.Scan(
+			&p.ID, &p.Address, &p.Type, &p.Status, &p.Latency, &p.Country,
+			&p.SourceType, &p.SourceURL, &p.CheckCount, &p.FailCount,
+			&lastChecked, &p.CreatedAt, &p.UpdatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+		if lastChecked.Valid {
+			p.LastChecked = &lastChecked.Time
+		}
+		proxies = append(proxies, p)
+	}
+
+	return proxies, rows.Err()
+}
+
+// GetAliveProxies retrieves all alive proxies for re-checking
+func GetAliveProxies(db *sql.DB) ([]Proxy, error) {
+	query := `
+		SELECT id, address, type, status, latency, country, source_type, source_url,
+		       check_count, fail_count, last_checked, created_at, updated_at
+		FROM proxies
+		WHERE status = ?
+	`
+
+	rows, err := db.Query(query, StatusAlive)
 	if err != nil {
 		return nil, err
 	}
@@ -179,6 +288,16 @@ func DeleteProxy(db *sql.DB, id int64) error {
 	return err
 }
 
+// DeleteDeadProxies removes all dead proxies from the database
+func DeleteDeadProxies(db *sql.DB) (int, error) {
+	result, err := db.Exec("DELETE FROM proxies WHERE status = ?", StatusDead)
+	if err != nil {
+		return 0, err
+	}
+	rows, _ := result.RowsAffected()
+	return int(rows), nil
+}
+
 // GetStats returns proxy statistics
 func GetStats(db *sql.DB) (map[string]interface{}, error) {
 	stats := make(map[string]interface{})
@@ -201,6 +320,13 @@ func GetStats(db *sql.DB) (map[string]interface{}, error) {
 		total += count
 	}
 	stats["total"] = total
+
+	// Count sources
+	var sourcesCount int
+	err = db.QueryRow("SELECT COUNT(*) FROM sources").Scan(&sourcesCount)
+	if err == nil {
+		stats["sources"] = sourcesCount
+	}
 
 	// Average latency of alive proxies
 	var avgLatency sql.NullFloat64
@@ -346,4 +472,82 @@ func UpdateSourceStatus(db *sql.DB, id int64, status string, proxyCount int) err
 func DeleteSource(db *sql.DB, id int64) error {
 	_, err := db.Exec("DELETE FROM sources WHERE id = ?", id)
 	return err
+}
+
+// Setting represents a setting entry
+type Setting struct {
+	Key         string
+	Value       string
+	Description string
+	UpdatedAt   time.Time
+}
+
+// GetSetting retrieves a setting value by key
+func GetSetting(db *sql.DB, key string) (string, error) {
+	var value string
+	err := db.QueryRow("SELECT value FROM settings WHERE key = ?", key).Scan(&value)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	return value, err
+}
+
+// GetSettingWithDefault retrieves a setting value or returns default
+func GetSettingWithDefault(db *sql.DB, key, defaultValue string) string {
+	value, err := GetSetting(db, key)
+	if err != nil || value == "" {
+		return defaultValue
+	}
+	return value
+}
+
+// GetAllSettings retrieves all settings
+func GetAllSettings(db *sql.DB) ([]Setting, error) {
+	rows, err := db.Query("SELECT key, value, description, updated_at FROM settings ORDER BY key")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var settings []Setting
+	for rows.Next() {
+		var s Setting
+		if err := rows.Scan(&s.Key, &s.Value, &s.Description, &s.UpdatedAt); err != nil {
+			return nil, err
+		}
+		settings = append(settings, s)
+	}
+	return settings, nil
+}
+
+// UpdateSetting updates a setting value
+func UpdateSetting(db *sql.DB, key, value string) error {
+	_, err := db.Exec(
+		"UPDATE settings SET value = ?, updated_at = ? WHERE key = ?",
+		value, time.Now(), key,
+	)
+	return err
+}
+
+// UpdateSettingsBatch updates multiple settings at once
+func UpdateSettingsBatch(db *sql.DB, settings map[string]string) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	stmt, err := tx.Prepare("UPDATE settings SET value = ?, updated_at = ? WHERE key = ?")
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for key, value := range settings {
+		if _, err := stmt.Exec(value, time.Now(), key); err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
 }

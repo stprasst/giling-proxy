@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -54,9 +55,17 @@ func main() {
 
 	log.Printf("Admin user initialized")
 
+	// Read worker count from database settings (or use config default)
+	workerCountStr := database.GetSettingWithDefault(db, "worker_count", "100")
+	workerCount := cfg.WorkerCount
+	if wc, err := strconv.Atoi(workerCountStr); err == nil && wc > 0 {
+		workerCount = wc
+	}
+	log.Printf("Using worker count: %d (from settings: %s)", workerCount, workerCountStr)
+
 	// Initialize services
 	checker := services.NewProxyChecker(cfg)
-	pool := services.NewWorkerPool(cfg.WorkerCount, checker)
+	pool := services.NewWorkerPool(workerCount, checker)
 	scraper := services.NewScraper()
 	exporter := services.NewExporter(db, "data")
 
@@ -66,6 +75,7 @@ func main() {
 	proxyHandler := handlers.NewProxyHandler(db, scraper, exporter)
 	sourceHandler := handlers.NewSourceHandler(db, scraper)
 	statsHandler := handlers.NewStatsHandler(db)
+	settingsHandler := handlers.NewSettingsHandler(db)
 
 	// Initialize scheduler
 	sched := scheduler.NewScheduler(db, cfg, checker, pool, scraper, exporter)
@@ -124,6 +134,7 @@ func main() {
 		api.GET("/sources", sourceHandler.List)
 		api.DELETE("/sources/:id", sourceHandler.Delete)
 		api.POST("/sources/:id/refresh", sourceHandler.Refresh)
+		api.POST("/sources/refresh-all", sourceHandler.RefreshAll)
 
 		// Stats routes
 		api.GET("/stats", statsHandler.GetStats)
@@ -131,6 +142,12 @@ func main() {
 
 		// Check routes
 		api.POST("/check/trigger", checkHandler.Trigger)
+		api.GET("/check/status", checkHandler.Status)
+
+		// Settings routes
+		api.GET("/settings", settingsHandler.GetAll)
+		api.POST("/settings", settingsHandler.Update)
+		api.POST("/settings/password", settingsHandler.UpdatePassword)
 	}
 
 	// Root redirect

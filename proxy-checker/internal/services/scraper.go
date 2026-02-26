@@ -32,6 +32,14 @@ func (s *Scraper) Fetch(url string) ([]string, error) {
 	return s.ParseProxies(body), nil
 }
 
+// FetchResult contains the result of fetching a source
+type FetchResult struct {
+	URL         string
+	Proxies     []string
+	RawCount    int // Total proxies found in response (before dedup)
+	Error       error
+}
+
 // ParseProxies extracts proxy addresses from text content
 func (s *Scraper) ParseProxies(body string) []string {
 	// Regex pattern for IP:PORT

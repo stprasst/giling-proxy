@@ -162,3 +162,72 @@ func (e *Exporter) GetExportPath() string {
 func (e *Exporter) GetFullExportPath() string {
 	return filepath.Join(e.basePath, "public", "proxy_alive_full.txt")
 }
+
+// ExportAll exports all proxies to files including type-specific files
+func (e *Exporter) ExportAll() error {
+	proxies, err := e.getAliveProxies()
+	if err != nil {
+		return fmt.Errorf("failed to get alive proxies: %w", err)
+	}
+
+	// Ensure directory exists
+	publicDir := filepath.Join(e.basePath, "public")
+	if err := os.MkdirAll(publicDir, 0755); err != nil {
+		return fmt.Errorf("failed to create public directory: %w", err)
+	}
+
+	// Export simple format
+	if err := e.exportSimple(proxies, publicDir); err != nil {
+		return err
+	}
+
+	// Export full format
+	if err := e.exportFull(proxies, publicDir); err != nil {
+		return err
+	}
+
+	// Export by type
+	types := []string{"http", "https", "socks4", "socks5"}
+	for _, t := range types {
+		if err := e.exportByType(proxies, t, publicDir); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// exportByType creates proxy_{type}.txt for a specific proxy type
+func (e *Exporter) exportByType(proxies []database.Proxy, proxyType string, dir string) error {
+	// Filter proxies by type
+	var filtered []database.Proxy
+	for _, p := range proxies {
+		if p.Type == proxyType {
+			filtered = append(filtered, p)
+		}
+	}
+
+	path := filepath.Join(dir, fmt.Sprintf("proxy_%s.txt", proxyType))
+
+	file, err := os.Create(path)
+	if err != nil {
+		return fmt.Errorf("failed to create %s: %w", path, err)
+	}
+	defer file.Close()
+
+	// Add header comment
+	fmt.Fprintf(file, "# Proxy %s List\n", proxyType)
+	fmt.Fprintf(file, "# Generated: %s\n", time.Now().Format(time.RFC3339))
+	fmt.Fprintf(file, "# Total: %d proxies\n\n", len(filtered))
+
+	for _, p := range filtered {
+		fmt.Fprintln(file, p.Address)
+	}
+
+	return nil
+}
+
+// GetTypeExportPath returns the path to a type-specific export file
+func (e *Exporter) GetTypeExportPath(proxyType string) string {
+	return filepath.Join(e.basePath, "public", fmt.Sprintf("proxy_%s.txt", proxyType))
+}

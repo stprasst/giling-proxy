@@ -34,7 +34,24 @@
                 </div>
                 <h1 class="text-xl font-bold text-gray-800">Proxy Checker</h1>
             </div>
-            <a href="/logout" class="text-gray-500 hover:text-danger transition">Logout</a>
+            <div class="flex items-center space-x-4">
+                <!-- Progress indicator (shown during check) -->
+                <div id="check-progress" class="hidden text-sm">
+                    <div class="flex items-center space-x-2">
+                        <div class="animate-spin w-4 h-4 border-2 border-primary border-t-transparent rounded-full"></div>
+                        <span>Checking: <span id="progress-text">0/0</span></span>
+                    </div>
+                    <div class="w-32 h-2 bg-gray-200 rounded-full mt-1">
+                        <div id="progress-bar" class="h-full bg-primary rounded-full transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                </div>
+                <!-- Countdown (shown when idle) -->
+                <div id="countdown-container" class="text-sm text-gray-600">
+                    <span class="font-medium">Next refresh:</span>
+                    <span id="countdown" class="font-mono text-primary">--:--</span>
+                </div>
+                <a href="/logout" class="text-gray-500 hover:text-danger transition">Logout</a>
+            </div>
         </div>
     </header>
 
@@ -43,19 +60,19 @@
         <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
             <div class="bg-white rounded-xl shadow-sm p-6">
                 <p class="text-gray-500 text-sm">Total Proxies</p>
-                <p class="text-3xl font-bold text-gray-800 mt-1">{{.stats.total}}</p>
+                <p class="text-3xl font-bold text-gray-800 mt-1" id="stat-total">{{.stats.total}}</p>
             </div>
             <div class="bg-white rounded-xl shadow-sm p-6">
                 <p class="text-gray-500 text-sm">Alive</p>
-                <p class="text-3xl font-bold text-success mt-1">{{.stats.alive}}</p>
+                <p class="text-3xl font-bold text-success mt-1" id="stat-alive">{{.stats.alive}}</p>
             </div>
             <div class="bg-white rounded-xl shadow-sm p-6">
-                <p class="text-gray-500 text-sm">Dead</p>
-                <p class="text-3xl font-bold text-danger mt-1">{{.stats.dead}}</p>
+                <p class="text-gray-500 text-sm">Sources</p>
+                <p class="text-3xl font-bold text-primary mt-1" id="stat-sources">{{.stats.sources}}</p>
             </div>
             <div class="bg-white rounded-xl shadow-sm p-6">
                 <p class="text-gray-500 text-sm">Unchecked</p>
-                <p class="text-3xl font-bold text-warning mt-1">{{.stats.unchecked}}</p>
+                <p class="text-3xl font-bold text-warning mt-1" id="stat-unchecked">{{.stats.unchecked}}</p>
             </div>
         </div>
 
@@ -63,14 +80,87 @@
         <div class="bg-white rounded-xl shadow-sm">
             <div class="border-b">
                 <nav class="flex space-x-4 px-6 pt-4">
-                    <button onclick="showTab('add')" class="tab-btn px-4 py-2 text-primary border-b-2 border-primary font-medium" data-tab="add">Add Proxies</button>
+                    <button onclick="showTab('sources')" class="tab-btn px-4 py-2 text-primary border-b-2 border-primary font-medium" data-tab="sources">Sources</button>
+                    <button onclick="showTab('add')" class="tab-btn px-4 py-2 text-gray-500 hover:text-gray-700" data-tab="add">Add Proxies</button>
                     <button onclick="showTab('list')" class="tab-btn px-4 py-2 text-gray-500 hover:text-gray-700" data-tab="list">Proxy List</button>
-                    <button onclick="showTab('sources')" class="tab-btn px-4 py-2 text-gray-500 hover:text-gray-700" data-tab="sources">Sources</button>
+                    <button onclick="showTab('settings')" class="tab-btn px-4 py-2 text-gray-500 hover:text-gray-700" data-tab="settings">Settings</button>
                 </nav>
             </div>
 
+            <!-- Sources Tab (FIRST) -->
+            <div id="tab-sources" class="tab-content p-6">
+                <div class="mb-6">
+                    <h3 class="text-lg font-semibold mb-4">Add Sources (one URL per line)</h3>
+                    <p class="text-sm text-gray-500 mb-3">All sources are auto-scraped based on Scrape Interval setting (default: 60m)</p>
+                    <form id="source-form" class="space-y-4">
+                        <textarea name="urls" rows="4"
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                            placeholder="https://raw.githubusercontent.com/.../proxy.txt&#10;https://example.com/proxy-list.txt&#10;https://another-source.com/proxies"></textarea>
+                        <div class="flex items-center space-x-4">
+                            <button type="submit" class="bg-primary text-white px-6 py-2 rounded-lg hover:bg-blue-600">
+                                Add Sources
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Actions -->
+                <div class="mb-6 flex flex-wrap gap-2">
+                    <button onclick="refreshAllSources()" class="bg-success text-white px-4 py-2 rounded-lg hover:bg-green-600 transition text-sm">
+                        Refresh All Sources
+                    </button>
+                    <button onclick="triggerCheck()" class="bg-warning text-white px-4 py-2 rounded-lg hover:bg-yellow-600 transition text-sm">
+                        Check All Proxies Now
+                    </button>
+                    <a href="/public/proxy_alive.txt" target="_blank" class="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300 transition text-sm">
+                        View All Alive
+                    </a>
+                    <a href="/public/proxy_http.txt" target="_blank" class="bg-blue-100 text-blue-700 px-4 py-2 rounded-lg hover:bg-blue-200 transition text-sm">
+                        HTTP
+                    </a>
+                    <a href="/public/proxy_https.txt" target="_blank" class="bg-green-100 text-green-700 px-4 py-2 rounded-lg hover:bg-green-200 transition text-sm">
+                        HTTPS
+                    </a>
+                    <a href="/public/proxy_socks4.txt" target="_blank" class="bg-purple-100 text-purple-700 px-4 py-2 rounded-lg hover:bg-purple-200 transition text-sm">
+                        SOCKS4
+                    </a>
+                    <a href="/public/proxy_socks5.txt" target="_blank" class="bg-orange-100 text-orange-700 px-4 py-2 rounded-lg hover:bg-orange-200 transition text-sm">
+                        SOCKS5
+                    </a>
+                    <a href="/public/proxy_alive_full.txt" target="_blank" class="bg-gray-700 text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition text-sm">
+                        Full Export
+                    </a>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-gray-600">URL</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-gray-600">Status</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-gray-600">Proxies</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-gray-600">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="source-list">
+                            {{range .sources}}
+                            <tr class="border-t hover:bg-gray-50">
+                                <td class="px-4 py-3 text-sm truncate max-w-md">{{.URL}}</td>
+                                <td class="px-4 py-3 text-sm">{{.LastStatus}}</td>
+                                <td class="px-4 py-3 text-sm">{{.ProxyCount}}</td>
+                                <td class="px-4 py-3 space-x-2">
+                                    <button onclick="refreshSource({{.ID}})" class="text-primary hover:underline text-sm">Refresh</button>
+                                    <button onclick="deleteSource({{.ID}})" class="text-danger hover:underline text-sm">Delete</button>
+                                </td>
+                            </tr>
+                            {{end}}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
             <!-- Add Proxies Tab -->
-            <div id="tab-add" class="tab-content p-6">
+            <div id="tab-add" class="tab-content hidden p-6">
                 <div class="grid md:grid-cols-2 gap-6">
                     <!-- Bulk Add -->
                     <div>
@@ -87,35 +177,15 @@
 
                     <!-- Fetch from URL -->
                     <div>
-                        <h3 class="text-lg font-semibold mb-4">Fetch from URL</h3>
+                        <h3 class="text-lg font-semibold mb-4">Fetch from Single URL</h3>
                         <form id="fetch-form" class="space-y-4">
                             <input type="url" name="url"
                                 class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                                 placeholder="https://example.com/proxy-list.txt">
-                            <label class="flex items-center space-x-2">
-                                <input type="checkbox" name="include_self" class="w-4 h-4 text-primary">
-                                <span class="text-sm text-gray-600">Include own proxy_alive.txt</span>
-                            </label>
                             <button type="submit" class="bg-primary text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition">
                                 Fetch Proxies
                             </button>
                         </form>
-                    </div>
-                </div>
-
-                <!-- Actions -->
-                <div class="mt-8 pt-6 border-t">
-                    <h3 class="text-lg font-semibold mb-4">Actions</h3>
-                    <div class="flex space-x-4">
-                        <button onclick="triggerCheck()" class="bg-success text-white px-6 py-2 rounded-lg hover:bg-green-600 transition">
-                            Trigger Check Now
-                        </button>
-                        <button onclick="exportProxies()" class="bg-gray-600 text-white px-6 py-2 rounded-lg hover:bg-gray-700 transition">
-                            Export Alive Proxies
-                        </button>
-                        <a href="/public/proxy_alive.txt" target="_blank" class="bg-gray-200 text-gray-700 px-6 py-2 rounded-lg hover:bg-gray-300 transition">
-                            View Public File
-                        </a>
                     </div>
                 </div>
             </div>
@@ -123,14 +193,28 @@
             <!-- Proxy List Tab -->
             <div id="tab-list" class="tab-content hidden p-6">
                 <div class="flex justify-between items-center mb-4">
-                    <div>
-                        <label class="text-sm text-gray-600 mr-2">Filter by status:</label>
-                        <select id="status-filter" onchange="loadProxies()" class="border rounded-lg px-3 py-2">
-                            <option value="">All</option>
-                            <option value="alive">Alive</option>
-                            <option value="dead">Dead</option>
-                            <option value="unchecked">Unchecked</option>
-                        </select>
+                    <div class="flex gap-4">
+                        <div>
+                            <label class="text-sm text-gray-600 mr-2">Status:</label>
+                            <select id="status-filter" onchange="loadProxies(1)" class="border rounded-lg px-3 py-2">
+                                <option value="">All (Alive + Unchecked)</option>
+                                <option value="alive">Alive Only</option>
+                                <option value="unchecked">Unchecked Only</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-sm text-gray-600 mr-2">Type:</label>
+                            <select id="type-filter" onchange="loadProxies(1)" class="border rounded-lg px-3 py-2">
+                                <option value="">All Types</option>
+                                <option value="http">HTTP</option>
+                                <option value="https">HTTPS</option>
+                                <option value="socks4">SOCKS4</option>
+                                <option value="socks5">SOCKS5</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="text-sm text-gray-600">
+                        Total: <span id="proxy-total" class="font-medium">0</span> proxies
                     </div>
                 </div>
                 <div class="overflow-x-auto">
@@ -141,7 +225,7 @@
                                 <th class="px-4 py-3 text-left text-sm font-medium text-gray-600">Type</th>
                                 <th class="px-4 py-3 text-left text-sm font-medium text-gray-600">Status</th>
                                 <th class="px-4 py-3 text-left text-sm font-medium text-gray-600">Latency</th>
-                                <th class="px-4 py-3 text-left text-sm font-medium text-gray-600">Checks</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-gray-600">Source</th>
                                 <th class="px-4 py-3 text-left text-sm font-medium text-gray-600">Actions</th>
                             </tr>
                         </thead>
@@ -153,13 +237,12 @@
                                 <td class="px-4 py-3">
                                     <span class="px-2 py-1 rounded text-xs font-medium
                                         {{if eq .Status "alive"}}bg-green-100 text-green-800{{end}}
-                                        {{if eq .Status "dead"}}bg-red-100 text-red-800{{end}}
                                         {{if eq .Status "unchecked"}}bg-yellow-100 text-yellow-800{{end}}">
                                         {{.Status}}
                                     </span>
                                 </td>
                                 <td class="px-4 py-3 text-sm">{{.Latency}}ms</td>
-                                <td class="px-4 py-3 text-sm">{{.CheckCount}}</td>
+                                <td class="px-4 py-3 text-sm truncate max-w-xs">{{if .SourceURL}}{{.SourceURL}}{{else}}{{.SourceType}}{{end}}</td>
                                 <td class="px-4 py-3">
                                     <button onclick="deleteProxy({{.ID}})" class="text-danger hover:underline text-sm">Delete</button>
                                 </td>
@@ -168,52 +251,115 @@
                         </tbody>
                     </table>
                 </div>
+                <!-- Pagination -->
+                <div id="pagination" class="mt-4 flex justify-center items-center space-x-2"></div>
             </div>
 
-            <!-- Sources Tab -->
-            <div id="tab-sources" class="tab-content hidden p-6">
-                <div class="mb-6">
-                    <h3 class="text-lg font-semibold mb-4">Add New Source</h3>
-                    <form id="source-form" class="flex space-x-4">
-                        <input type="url" name="url" required
-                            class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary"
-                            placeholder="https://example.com/proxy-list.txt">
-                        <label class="flex items-center space-x-2">
-                            <input type="checkbox" name="auto_refresh" checked class="w-4 h-4">
-                            <span class="text-sm">Auto refresh</span>
-                        </label>
-                        <button type="submit" class="bg-primary text-white px-6 py-2 rounded-lg hover:bg-blue-600">
-                            Add Source
-                        </button>
-                    </form>
-                </div>
+            <!-- Settings Tab -->
+            <div id="tab-settings" class="tab-content hidden p-6">
+                <div class="max-w-2xl">
+                    <h3 class="text-lg font-semibold mb-6">Application Settings</h3>
 
-                <div class="overflow-x-auto">
-                    <table class="w-full">
-                        <thead class="bg-gray-50">
-                            <tr>
-                                <th class="px-4 py-3 text-left text-sm font-medium text-gray-600">URL</th>
-                                <th class="px-4 py-3 text-left text-sm font-medium text-gray-600">Auto</th>
-                                <th class="px-4 py-3 text-left text-sm font-medium text-gray-600">Status</th>
-                                <th class="px-4 py-3 text-left text-sm font-medium text-gray-600">Proxies</th>
-                                <th class="px-4 py-3 text-left text-sm font-medium text-gray-600">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="source-list">
-                            {{range .sources}}
-                            <tr class="border-t hover:bg-gray-50">
-                                <td class="px-4 py-3 text-sm truncate max-w-md">{{.URL}}</td>
-                                <td class="px-4 py-3 text-sm">{{if .AutoRefresh}}Yes{{else}}No{{end}}</td>
-                                <td class="px-4 py-3 text-sm">{{.LastStatus}}</td>
-                                <td class="px-4 py-3 text-sm">{{.ProxyCount}}</td>
-                                <td class="px-4 py-3 space-x-2">
-                                    <button onclick="refreshSource({{.ID}})" class="text-primary hover:underline text-sm">Refresh</button>
-                                    <button onclick="deleteSource({{.ID}})" class="text-danger hover:underline text-sm">Delete</button>
-                                </td>
-                            </tr>
-                            {{end}}
-                        </tbody>
-                    </table>
+                    <!-- General Settings -->
+                    <form id="settings-form" class="space-y-6">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                Check Interval (Alive Proxies)
+                                <span class="text-gray-400 font-normal">(re-check alive proxies, e.g. 15m, 20m)</span>
+                            </label>
+                            <input type="text" id="setting-check_interval" name="check_interval"
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                                placeholder="15m">
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                Scrape Interval
+                                <span class="text-gray-400 font-normal">(scrape + check all proxies, e.g. 60m, 1h)</span>
+                            </label>
+                            <input type="text" id="setting-scrape_interval" name="scrape_interval"
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                                placeholder="60m">
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                Worker Count
+                                <span class="text-gray-400 font-normal">(concurrent checks, 1-500)</span>
+                            </label>
+                            <input type="number" id="setting-worker_count" name="worker_count" min="1" max="500"
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                                placeholder="100">
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                Check Timeout
+                                <span class="text-gray-400 font-normal">(per proxy, e.g. 10s, 15s, 30s)</span>
+                            </label>
+                            <input type="text" id="setting-check_timeout" name="check_timeout"
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                                placeholder="10s">
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                Test URLs
+                                <span class="text-gray-400 font-normal">(comma separated)</span>
+                            </label>
+                            <textarea id="setting-test_urls" name="test_urls" rows="3"
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                                placeholder="httpbin.org/ip,api.ipify.org"></textarea>
+                        </div>
+
+                        <div class="flex items-center space-x-4">
+                            <button type="submit" class="bg-primary text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition">
+                                Save Settings
+                            </button>
+                            <span class="text-sm text-gray-500" id="settings-status"></span>
+                        </div>
+                    </form>
+
+                    <!-- Password Change -->
+                    <div class="mt-10 pt-8 border-t">
+                        <h3 class="text-lg font-semibold mb-6">Change Password</h3>
+                        <form id="password-form" class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Current Password</label>
+                                <input type="password" id="current_password" name="current_password" required
+                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">New Password</label>
+                                <input type="password" id="new_password" name="new_password" required minlength="12"
+                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Confirm New Password</label>
+                                <input type="password" id="confirm_password" name="confirm_password" required minlength="12"
+                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            </div>
+                            <div class="flex items-center space-x-4">
+                                <button type="submit" class="bg-gray-700 text-white px-6 py-2 rounded-lg hover:bg-gray-800 transition">
+                                    Update Password
+                                </button>
+                                <span class="text-sm text-gray-500" id="password-status"></span>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Info -->
+                    <div class="mt-10 pt-8 border-t">
+                        <h3 class="text-lg font-semibold mb-4">Schedule Information</h3>
+                        <div class="text-sm text-gray-600 space-y-2">
+                            <p>• <strong>Check Interval:</strong> How often to re-check alive proxies only <span class="text-orange-600">(requires restart)</span></p>
+                            <p>• <strong>Scrape Interval:</strong> How often to scrape sources + check all proxies (alive + new) <span class="text-orange-600">(requires restart)</span></p>
+                            <p>• <strong>Worker Count:</strong> Number of concurrent proxy checks (higher = faster but more resource intensive) <span class="text-orange-600">(requires restart)</span></p>
+                            <p>• <strong>Check Timeout:</strong> Maximum time to wait for each proxy response <span class="text-green-600">(immediate)</span></p>
+                            <p>• <strong>Test URLs:</strong> URLs used to verify proxy connectivity (tried in order) <span class="text-green-600">(immediate)</span></p>
+                        </div>
+                        <p class="mt-4 text-sm text-gray-500">Note: Changes marked "immediate" take effect on next check. "Requires restart" needs app restart.</p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -224,7 +370,28 @@
 <div id="toast" class="fixed bottom-4 right-4 bg-gray-800 text-white px-6 py-3 rounded-lg shadow-lg hidden"></div>
 
 <script>
-// Tab switching
+// State
+let currentPage = 1;
+let currentStatus = '';
+let currentType = '';
+let nextRefreshTime = null;
+let countdownInterval = null;
+let progressInterval = null;
+
+// Initialize
+document.addEventListener('DOMContentLoaded', () => {
+    // Restore tab from URL hash or localStorage
+    const savedTab = localStorage.getItem('activeTab') || 'sources';
+    showTab(savedTab);
+
+    // Fetch and start real countdown
+    fetchCountdown();
+
+    // Start progress polling (single interval)
+    startProgressPolling();
+});
+
+// Tab switching with persistence
 function showTab(name) {
     document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
     document.querySelectorAll('.tab-btn').forEach(el => {
@@ -235,6 +402,17 @@ function showTab(name) {
     const btn = document.querySelector(`[data-tab="${name}"]`);
     btn.classList.add('text-primary', 'border-b-2', 'border-primary', 'font-medium');
     btn.classList.remove('text-gray-500');
+
+    // Save to localStorage
+    localStorage.setItem('activeTab', name);
+
+    // Load data for tab
+    if (name === 'list') {
+        loadProxies(1);
+    }
+    if (name === 'settings') {
+        loadSettings();
+    }
 }
 
 // Show toast
@@ -242,6 +420,7 @@ function showToast(message, isError = false) {
     const toast = document.getElementById('toast');
     toast.textContent = message;
     toast.className = `fixed bottom-4 right-4 px-6 py-3 rounded-lg shadow-lg ${isError ? 'bg-danger' : 'bg-success'} text-white`;
+    toast.classList.remove('hidden');
     setTimeout(() => toast.classList.add('hidden'), 3000);
 }
 
@@ -252,6 +431,110 @@ async function api(url, options = {}) {
         headers: { 'Content-Type': 'application/json', ...options.headers }
     });
     return res.json();
+}
+
+// Countdown timer
+function startCountdown(seconds) {
+    nextRefreshTime = Date.now() + seconds * 1000;
+
+    if (countdownInterval) clearInterval(countdownInterval);
+
+    countdownInterval = setInterval(() => {
+        const remaining = Math.max(0, Math.floor((nextRefreshTime - Date.now()) / 1000));
+        const mins = Math.floor(remaining / 60);
+        const secs = remaining % 60;
+        document.getElementById('countdown').textContent =
+            `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+
+        if (remaining <= 0) {
+            // Fetch new countdown from server
+            fetchCountdown();
+            refreshStats();
+        }
+    }, 1000);
+}
+
+// Progress polling (single interval)
+function startProgressPolling() {
+    if (progressInterval) clearInterval(progressInterval);
+    progressInterval = setInterval(() => {
+        fetchCountdown();
+    }, 3000); // Poll every 3 seconds
+}
+
+// Fetch real countdown from server
+async function fetchCountdown() {
+    try {
+        const res = await api('/api/check/status');
+        if (res.success && res.data) {
+            const data = res.data;
+
+            // Handle progress
+            if (data.running && data.progress_total > 0) {
+                document.getElementById('check-progress').classList.remove('hidden');
+                document.getElementById('countdown-container').classList.add('hidden');
+                document.getElementById('progress-text').textContent =
+                    `${data.progress_processed}/${data.progress_total} (${data.progress_alive} alive)`;
+                document.getElementById('progress-bar').style.width = `${data.progress_percent}%`;
+            } else {
+                document.getElementById('check-progress').classList.add('hidden');
+                document.getElementById('countdown-container').classList.remove('hidden');
+            }
+
+            // Handle countdown
+            if (data.next_check) {
+                const nextCheck = new Date(data.next_check);
+                const seconds = Math.max(0, Math.floor((nextCheck - Date.now()) / 1000));
+                startCountdown(seconds);
+            }
+
+            // Update settings display if available
+            if (data.settings_interval) {
+                document.querySelector('[name="check_interval"]')?.setAttribute('placeholder', data.settings_interval);
+            }
+        }
+    } catch (e) {
+        // Fallback to 20 minutes on error
+        startCountdown(20 * 60);
+    }
+}
+
+// Refresh stats
+async function refreshStats() {
+    const res = await api('/api/stats');
+    if (res.success) {
+        document.getElementById('stat-total').textContent = res.data.total || 0;
+        document.getElementById('stat-alive').textContent = res.data.alive || 0;
+        document.getElementById('stat-sources').textContent = res.data.sources || 0;
+        document.getElementById('stat-unchecked').textContent = res.data.unchecked || 0;
+    }
+}
+
+// Multiline source form
+document.getElementById('source-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const urls = e.target.urls.value;
+
+    const res = await api('/api/sources', {
+        method: 'POST',
+        body: JSON.stringify({ urls, auto_refresh: true, interval_minutes: 60 })
+    });
+
+    if (res.success) {
+        showToast(`Added ${res.inserted} of ${res.total} sources`);
+        e.target.reset();
+        setTimeout(() => location.reload(), 1000);
+    } else {
+        showToast(res.error, true);
+    }
+});
+
+// Refresh all sources
+async function refreshAllSources() {
+    showToast('Refreshing all sources...');
+    const res = await api('/api/sources/refresh-all', { method: 'POST' });
+    showToast(res.message || res.error, !res.success);
+    if (res.success) setTimeout(() => location.reload(), 1500);
 }
 
 // Bulk add form
@@ -265,6 +548,7 @@ document.getElementById('bulk-form').addEventListener('submit', async (e) => {
     if (res.success) {
         showToast(`Added ${res.inserted} of ${res.total} proxies`);
         e.target.reset();
+        refreshStats();
     } else {
         showToast(res.error, true);
     }
@@ -274,63 +558,53 @@ document.getElementById('bulk-form').addEventListener('submit', async (e) => {
 document.getElementById('fetch-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const url = e.target.url.value;
-    const include_self = e.target.include_self.checked;
     const res = await api('/api/proxies/fetch', {
         method: 'POST',
-        body: JSON.stringify({ url, include_self })
+        body: JSON.stringify({ url, include_self: false })
     });
     if (res.success) {
         showToast(`Fetched ${res.fetched}, inserted ${res.inserted}`);
         e.target.reset();
+        refreshStats();
     } else {
         showToast(res.error, true);
     }
 });
 
-// Source form
-document.getElementById('source-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const url = e.target.url.value;
-    const auto_refresh = e.target.auto_refresh.checked;
-    const res = await api('/api/sources', {
-        method: 'POST',
-        body: JSON.stringify({ url, auto_refresh, interval_minutes: 20 })
-    });
-    if (res.success) {
-        showToast('Source added');
-        location.reload();
-    } else {
-        showToast(res.error, true);
-    }
-});
-
-// Actions
+// Trigger check
 async function triggerCheck() {
+    showToast('Starting proxy check...');
     const res = await api('/api/check/trigger', { method: 'POST' });
-    showToast(res.message || res.error, !res.success);
+    showToast(res.message || 'Check started', !res.success);
+    // Fetch new countdown after triggering
+    setTimeout(() => fetchCountdown(), 1000);
 }
 
-async function exportProxies() {
-    const res = await api('/api/export', { method: 'POST' });
-    showToast(res.message || res.error, !res.success);
-}
-
+// Delete proxy
 async function deleteProxy(id) {
     if (!confirm('Delete this proxy?')) return;
     const res = await api(`/api/proxies/${id}`, { method: 'DELETE' });
     if (res.success) {
         showToast('Deleted');
-        location.reload();
+        loadProxies(currentPage);
+        refreshStats();
     } else {
         showToast(res.error, true);
     }
 }
 
+// Refresh source
 async function refreshSource(id) {
+    showToast('Refreshing source...');
     const res = await api(`/api/sources/${id}/refresh`, { method: 'POST' });
-    showToast(res.success ? `Refreshed: ${res.inserted} new` : res.error, !res.success);
+    showToast(res.success ? `Refreshed: ${res.inserted} new proxies` : res.error, !res.success);
+    if (res.success) {
+        refreshStats();
+        setTimeout(() => location.reload(), 1000);
+    }
 }
 
+// Delete source
 async function deleteSource(id) {
     if (!confirm('Delete this source?')) return;
     const res = await api(`/api/sources/${id}`, { method: 'DELETE' });
@@ -342,13 +616,152 @@ async function deleteSource(id) {
     }
 }
 
-async function loadProxies() {
-    const status = document.getElementById('status-filter').value;
-    const res = await api(`/api/proxies?limit=100&status=${status}`);
+// Load proxies with pagination
+async function loadProxies(page) {
+    currentPage = page;
+    currentStatus = document.getElementById('status-filter').value;
+    currentType = document.getElementById('type-filter').value;
+
+    const res = await api(`/api/proxies?page=${page}&limit=50&status=${currentStatus}&type=${currentType}`);
     if (res.success) {
-        // Update table would go here
+        document.getElementById('proxy-total').textContent = res.total;
+        renderProxyTable(res.data);
+        renderPagination(res.total, res.page, res.limit);
     }
 }
+
+// Render proxy table
+function renderProxyTable(proxies) {
+    const tbody = document.getElementById('proxy-list');
+    tbody.innerHTML = proxies.map(p => `
+        <tr class="border-t hover:bg-gray-50">
+            <td class="px-4 py-3 font-mono text-sm">${p.address}</td>
+            <td class="px-4 py-3 text-sm">${p.type || 'unknown'}</td>
+            <td class="px-4 py-3">
+                <span class="px-2 py-1 rounded text-xs font-medium
+                    ${p.status === 'alive' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}">
+                    ${p.status}
+                </span>
+            </td>
+            <td class="px-4 py-3 text-sm">${p.latency}ms</td>
+            <td class="px-4 py-3 text-sm truncate max-w-xs">${p.source_url || p.source_type}</td>
+            <td class="px-4 py-3">
+                <button onclick="deleteProxy(${p.id})" class="text-danger hover:underline text-sm">Delete</button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+// Render pagination
+function renderPagination(total, currentPage, limit) {
+    const totalPages = Math.ceil(total / limit);
+    const pagination = document.getElementById('pagination');
+
+    if (totalPages <= 1) {
+        pagination.innerHTML = '';
+        return;
+    }
+
+    let html = '';
+
+    // Previous
+    if (currentPage > 1) {
+        html += `<button onclick="loadProxies(${currentPage - 1})" class="px-3 py-1 border rounded hover:bg-gray-100">Prev</button>`;
+    }
+
+    // Pages
+    const start = Math.max(1, currentPage - 2);
+    const end = Math.min(totalPages, currentPage + 2);
+
+    for (let i = start; i <= end; i++) {
+        html += `<button onclick="loadProxies(${i})" class="px-3 py-1 border rounded ${i === currentPage ? 'bg-primary text-white' : 'hover:bg-gray-100'}">${i}</button>`;
+    }
+
+    // Next
+    if (currentPage < totalPages) {
+        html += `<button onclick="loadProxies(${currentPage + 1})" class="px-3 py-1 border rounded hover:bg-gray-100">Next</button>`;
+    }
+
+    pagination.innerHTML = html;
+}
+
+// Load settings
+async function loadSettings() {
+    const res = await api('/api/settings');
+    if (res.success && res.data) {
+        const data = res.data;
+        if (data.check_interval) document.getElementById('setting-check_interval').value = data.check_interval.value;
+        if (data.worker_count) document.getElementById('setting-worker_count').value = data.worker_count.value;
+        if (data.check_timeout) document.getElementById('setting-check_timeout').value = data.check_timeout.value;
+        if (data.test_urls) document.getElementById('setting-test_urls').value = data.test_urls.value;
+    }
+}
+
+// Settings form
+document.getElementById('settings-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const status = document.getElementById('settings-status');
+    status.textContent = 'Saving...';
+
+    const settings = {
+        check_interval: document.getElementById('setting-check_interval').value,
+        worker_count: document.getElementById('setting-worker_count').value,
+        check_timeout: document.getElementById('setting-check_timeout').value,
+        test_urls: document.getElementById('setting-test_urls').value,
+    };
+
+    const res = await api('/api/settings', {
+        method: 'POST',
+        body: JSON.stringify({ settings })
+    });
+
+    if (res.success) {
+        status.textContent = 'Saved! ' + (res.message || '');
+        status.className = 'text-sm text-green-600';
+    } else {
+        status.textContent = 'Error: ' + (res.error || 'Unknown error');
+        status.className = 'text-sm text-red-600';
+    }
+
+    setTimeout(() => status.textContent = '', 5000);
+});
+
+// Password form
+document.getElementById('password-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const status = document.getElementById('password-status');
+
+    const currentPassword = document.getElementById('current_password').value;
+    const newPassword = document.getElementById('new_password').value;
+    const confirmPassword = document.getElementById('confirm_password').value;
+
+    if (newPassword !== confirmPassword) {
+        status.textContent = 'Passwords do not match';
+        status.className = 'text-sm text-red-600';
+        return;
+    }
+
+    status.textContent = 'Updating...';
+
+    const res = await api('/api/settings/password', {
+        method: 'POST',
+        body: JSON.stringify({
+            current_password: currentPassword,
+            new_password: newPassword
+        })
+    });
+
+    if (res.success) {
+        status.textContent = 'Password updated!';
+        status.className = 'text-sm text-green-600';
+        e.target.reset();
+    } else {
+        status.textContent = 'Error: ' + (res.error || 'Unknown error');
+        status.className = 'text-sm text-red-600';
+    }
+
+    setTimeout(() => status.textContent = '', 5000);
+});
 </script>
 </body>
 </html>

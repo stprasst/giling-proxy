@@ -82,6 +82,35 @@ var migrations = []Migration{
 		CREATE INDEX IF NOT EXISTS idx_check_logs_proxy_id ON check_logs(proxy_id);
 		CREATE INDEX IF NOT EXISTS idx_check_logs_checked_at ON check_logs(checked_at);`,
 	},
+	{
+		Name: "006_create_settings_table",
+		SQL: `
+		CREATE TABLE IF NOT EXISTS settings (
+			key TEXT PRIMARY KEY,
+			value TEXT NOT NULL,
+			description TEXT DEFAULT '',
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		);
+		INSERT OR IGNORE INTO settings (key, value, description) VALUES
+			('check_interval', '15m', 'Re-check alive proxies interval (e.g. 15m, 20m)'),
+			('scrape_interval', '60m', 'Scrape sources + check all proxies interval (e.g. 60m, 1h)'),
+			('worker_count', '100', 'Number of concurrent workers'),
+			('check_timeout', '10s', 'Timeout for each proxy check'),
+			('test_urls', 'httpbin.org/ip,api.ipify.org,cloudflare.com/cdn-cgi/trace', 'Test URLs for proxy checking (comma separated)');
+		`,
+	},
+	{
+		Name: "007_update_check_interval_default",
+		SQL: `
+		-- Update check_interval from 20m to 15m for existing installations
+		-- Only update if it's still the old default (user hasn't changed it)
+		UPDATE settings SET value = '15m', description = 'Re-check alive proxies interval (e.g. 15m, 20m)'
+		WHERE key = 'check_interval' AND value = '20m';
+		-- Add scrape_interval if it doesn't exist (for databases created before this migration)
+		INSERT OR IGNORE INTO settings (key, value, description) VALUES
+			('scrape_interval', '60m', 'Scrape sources + check all proxies interval (e.g. 60m, 1h)');
+		`,
+	},
 }
 
 // RunMigrations executes all pending migrations
