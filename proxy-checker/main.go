@@ -141,6 +141,7 @@ func main() {
 
 		// Check routes
 		api.POST("/check/trigger", checkHandler.Trigger)
+		api.POST("/check/alive", checkHandler.TriggerAlive)
 		api.GET("/check/status", checkHandler.Status)
 
 		// Settings routes

@@ -17,14 +17,24 @@ type ProxyChecker struct {
 	testURLs   []string
 	timeout    time.Duration
 	httpClient *http.Client
+	checkSOCKS4 bool
+	checkSOCKS5 bool
 }
 
 // NewProxyChecker creates a new proxy checker
 func NewProxyChecker(cfg *config.Config) *ProxyChecker {
 	return &ProxyChecker{
-		testURLs: cfg.TestURLs,
-		timeout:  cfg.CheckTimeout,
+		testURLs:    cfg.TestURLs,
+		timeout:     cfg.CheckTimeout,
+		checkSOCKS4: true, // default enabled
+		checkSOCKS5: true, // default enabled
 	}
+}
+
+// SetProtocolSettings sets which SOCKS protocols to check
+func (c *ProxyChecker) SetProtocolSettings(checkSOCKS4, checkSOCKS5 bool) {
+	c.checkSOCKS4 = checkSOCKS4
+	c.checkSOCKS5 = checkSOCKS5
 }
 
 // CheckProxy checks a single proxy and returns the result
@@ -47,8 +57,20 @@ func (c *ProxyChecker) CheckProxy(job ProxyJob) ProxyResult {
 	}{
 		{"http", c.testHTTP},
 		{"https", c.testHTTPS},
-		{"socks5", c.testSOCKS5},
-		{"socks4", c.testSOCKS4},
+	}
+	// Add SOCKS5 if enabled
+	if c.checkSOCKS5 {
+		protocols = append(protocols, struct {
+			name string
+			test func(string, time.Duration) (bool, int, error)
+		}{"socks5", c.testSOCKS5})
+	}
+	// Add SOCKS4 if enabled
+	if c.checkSOCKS4 {
+		protocols = append(protocols, struct {
+			name string
+			test func(string, time.Duration) (bool, int, error)
+		}{"socks4", c.testSOCKS4})
 	}
 
 	for _, proto := range protocols {

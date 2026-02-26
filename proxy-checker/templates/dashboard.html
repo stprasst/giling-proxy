@@ -109,6 +109,9 @@
                     <button onclick="refreshAllSources()" class="bg-success text-white px-4 py-2 rounded-lg hover:bg-green-600 transition text-sm">
                         Refresh All Sources
                     </button>
+                    <button onclick="triggerCheckAlive()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition text-sm">
+                        Check Alive Proxies Only
+                    </button>
                     <button onclick="triggerCheck()" class="bg-warning text-white px-4 py-2 rounded-lg hover:bg-yellow-600 transition text-sm">
                         Check All Proxies Now
                     </button>
@@ -300,6 +303,19 @@
                             <input type="text" id="setting-check_timeout" name="check_timeout"
                                 class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                                 placeholder="10s">
+                        </div>
+
+                        <div class="flex items-center space-x-6">
+                            <label class="flex items-center space-x-2 cursor-pointer">
+                                <input type="checkbox" id="setting-check_socks4" name="check_socks4"
+                                    class="w-5 h-5 text-primary rounded border-gray-300 focus:ring-primary">
+                                <span class="text-sm font-medium text-gray-700">Check SOCKS4</span>
+                            </label>
+                            <label class="flex items-center space-x-2 cursor-pointer">
+                                <input type="checkbox" id="setting-check_socks5" name="check_socks5"
+                                    class="w-5 h-5 text-primary rounded border-gray-300 focus:ring-primary">
+                                <span class="text-sm font-medium text-gray-700">Check SOCKS5</span>
+                            </label>
                         </div>
 
                         <div>
@@ -580,6 +596,15 @@ async function triggerCheck() {
     setTimeout(() => fetchCountdown(), 1000);
 }
 
+// Trigger alive-only check
+async function triggerCheckAlive() {
+    showToast('Starting alive proxy re-check...');
+    const res = await api('/api/check/alive', { method: 'POST' });
+    showToast(res.message || 'Check started', !res.success);
+    // Fetch new countdown after triggering
+    setTimeout(() => fetchCountdown(), 1000);
+}
+
 // Delete proxy
 async function deleteProxy(id) {
     if (!confirm('Delete this proxy?')) return;
@@ -691,9 +716,12 @@ async function loadSettings() {
     if (res.success && res.data) {
         const data = res.data;
         if (data.check_interval) document.getElementById('setting-check_interval').value = data.check_interval.value;
+        if (data.scrape_interval) document.getElementById('setting-scrape_interval').value = data.scrape_interval.value;
         if (data.worker_count) document.getElementById('setting-worker_count').value = data.worker_count.value;
         if (data.check_timeout) document.getElementById('setting-check_timeout').value = data.check_timeout.value;
         if (data.test_urls) document.getElementById('setting-test_urls').value = data.test_urls.value;
+        if (data.check_socks4) document.getElementById('setting-check_socks4').checked = data.check_socks4.value === 'true' || data.check_socks4.value === true;
+        if (data.check_socks5) document.getElementById('setting-check_socks5').checked = data.check_socks5.value === 'true' || data.check_socks5.value === true;
     }
 }
 
@@ -705,9 +733,12 @@ document.getElementById('settings-form').addEventListener('submit', async (e) =>
 
     const settings = {
         check_interval: document.getElementById('setting-check_interval').value,
+        scrape_interval: document.getElementById('setting-scrape_interval').value,
         worker_count: document.getElementById('setting-worker_count').value,
         check_timeout: document.getElementById('setting-check_timeout').value,
         test_urls: document.getElementById('setting-test_urls').value,
+        check_socks4: document.getElementById('setting-check_socks4').checked,
+        check_socks5: document.getElementById('setting-check_socks5').checked,
     };
 
     const res = await api('/api/settings', {

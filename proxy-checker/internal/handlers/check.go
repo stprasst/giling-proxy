@@ -27,6 +27,15 @@ func (h *CheckHandler) Trigger(c *gin.Context) {
 	})
 }
 
+// TriggerAlive manually triggers an alive-only proxy check
+func (h *CheckHandler) TriggerAlive(c *gin.Context) {
+	h.scheduler.TriggerAliveCheck()
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Alive proxy check triggered",
+	})
+}
+
 // Status returns the scheduler status including next check time
 func (h *CheckHandler) Status(c *gin.Context) {
 	status := h.scheduler.GetStatus()

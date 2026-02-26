@@ -78,6 +78,13 @@ func (s *Scheduler) SetupJobs() error {
 		s.checkTimeout = timeout
 	}
 
+	// Read protocol settings (SOCKS4/SOCKS5)
+	checkSOCKS4Str := database.GetSettingWithDefault(s.db, "check_socks4", "true")
+	checkSOCKS5Str := database.GetSettingWithDefault(s.db, "check_socks5", "true")
+	checkSOCKS4 := checkSOCKS4Str == "true" || checkSOCKS4Str == "1"
+	checkSOCKS5 := checkSOCKS5Str == "true" || checkSOCKS5Str == "1"
+	s.checker.SetProtocolSettings(checkSOCKS4, checkSOCKS5)
+
 	// Update initial next_check time so countdown displays correctly
 	s.mu.Lock()
 	s.nextCheck = time.Now().Add(s.checkInterval)
@@ -492,6 +499,23 @@ func (s *Scheduler) TriggerCheck() {
 		s.mu.Unlock()
 	}
 	go s.scrapeAndCheck()
+}
+
+// TriggerAliveCheck manually triggers an alive-only re-check
+func (s *Scheduler) TriggerAliveCheck() {
+	// Read interval from database
+	intervalStr := database.GetSettingWithDefault(s.db, "check_interval", "15m")
+	if interval, err := time.ParseDuration(intervalStr); err == nil {
+		s.mu.Lock()
+		s.checkInterval = interval
+		s.nextCheck = time.Now().Add(interval)
+		s.mu.Unlock()
+	} else {
+		s.mu.Lock()
+		s.nextCheck = time.Now().Add(s.checkInterval)
+		s.mu.Unlock()
+	}
+	go s.checkAliveProxies()
 }
 
 // GetStatus returns the current scheduler status

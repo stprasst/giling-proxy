@@ -111,6 +111,15 @@ var migrations = []Migration{
 			('scrape_interval', '60m', 'Scrape sources + check all proxies interval (e.g. 60m, 1h)');
 		`,
 	},
+	{
+		Name: "008_add_socks_protocol_settings",
+		SQL: `
+			-- Add SOCKS4/SOCKS5 protocol check settings
+			INSERT OR IGNORE INTO settings (key, value, description) VALUES
+				('check_socks4', 'true', 'Enable SOCKS4 protocol checking'),
+				('check_socks5', 'true', 'Enable SOCKS5 protocol checking');
+		`,
+	},
 }
 
 // RunMigrations executes all pending migrations
