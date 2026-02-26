@@ -737,8 +737,8 @@ document.getElementById('settings-form').addEventListener('submit', async (e) =>
         worker_count: document.getElementById('setting-worker_count').value,
         check_timeout: document.getElementById('setting-check_timeout').value,
         test_urls: document.getElementById('setting-test_urls').value,
-        check_socks4: document.getElementById('setting-check_socks4').checked,
-        check_socks5: document.getElementById('setting-check_socks5').checked,
+        check_socks4: document.getElementById('setting-check_socks4').checked ? 'true' : 'false',
+        check_socks5: document.getElementById('setting-check_socks5').checked ? 'true' : 'false',
     };
 
     const res = await api('/api/settings', {
