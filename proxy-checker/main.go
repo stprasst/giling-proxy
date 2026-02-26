@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
-	"syscall"
 	"time"
 
 	"github.com/gin-contrib/sessions"
@@ -170,17 +169,17 @@ func main() {
 		Handler: r,
 	}
 
-	// Graceful shutdown
+	// Graceful shutdown - Windows compatible
 	go func() {
 		log.Printf("Server starting on port %s", cfg.Port)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Server error: %v", err)
+			log.Printf("Server error: %v", err)
 		}
 	}()
 
-	// Wait for interrupt signal
+	// Wait for interrupt signal (Windows + Unix compatible)
 	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	signal.Notify(quit, os.Interrupt) // Ctrl+C on all platforms
 	<-quit
 
 	log.Println("Shutting down server...")
