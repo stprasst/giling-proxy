@@ -551,3 +551,90 @@ func UpdateSettingsBatch(db *sql.DB, settings map[string]string) error {
 
 	return tx.Commit()
 }
+
+// ProxyResultBatch represents a batch of proxy check results
+type ProxyResultBatch struct {
+	ID      int64
+	Alive   bool
+	Type    string
+	Latency int
+}
+
+// CheckLogBatch represents a batch of check log entries
+type CheckLogBatch struct {
+	ProxyID int64
+	Status  string
+	Latency int
+	ErrorMsg string
+}
+
+// UpdateProxyStatusBatch updates multiple proxy statuses in a single transaction
+func UpdateProxyStatusBatch(db *sql.DB, results []ProxyResultBatch) error {
+	if len(results) == 0 {
+		return nil
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	now := time.Now()
+	query := `
+		UPDATE proxies SET
+			status = ?,
+			type = ?,
+			latency = ?,
+			last_checked = ?,
+			check_count = check_count + 1,
+			fail_count = CASE WHEN ? = 'alive' THEN fail_count ELSE fail_count + 1 END,
+			updated_at = ?
+		WHERE id = ?
+	`
+
+	stmt, err := tx.Prepare(query)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for _, r := range results {
+		status := StatusAlive
+		if !r.Alive {
+			status = StatusDead
+		}
+		if _, err := stmt.Exec(status, r.Type, r.Latency, now, status, now, r.ID); err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
+}
+
+// InsertCheckLogBatch inserts multiple check log entries in a single transaction
+func InsertCheckLogBatch(db *sql.DB, logs []CheckLogBatch) error {
+	if len(logs) == 0 {
+		return nil
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	stmt, err := tx.Prepare("INSERT INTO check_logs (proxy_id, status, latency, error_msg, checked_at) VALUES (?, ?, ?, ?, ?)")
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for _, log := range logs {
+		if _, err := stmt.Exec(log.ProxyID, log.Status, log.Latency, log.ErrorMsg, time.Now()); err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
+}

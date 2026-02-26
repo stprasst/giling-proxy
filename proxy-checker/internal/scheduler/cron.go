@@ -243,29 +243,113 @@ func (s *Scheduler) scrapeAndCheck() {
 	s.runProxyCheck(allProxies, "all")
 }
 
+// BatchResult holds results for batch DB writes
+type BatchResult struct {
+	ID      int64
+	Address string
+	Alive   bool
+	Type    string
+	Latency int
+	Error   string
+}
+
 // runProxyCheck executes the actual proxy checking logic
 func (s *Scheduler) runProxyCheck(proxies []database.Proxy, checkType string) {
 	// Start worker pool
 	s.pool.Start()
 
-	// Channel to signal when result collection is done
+	// Channels for async batch processing
+	resultChan := make(chan services.ProxyResult, 1000)
+	batchWriterDone := make(chan struct{})
+
+	// Start async batch writer goroutine
+	go func() {
+		defer close(batchWriterDone)
+		batchSize := 500
+		batch := make([]BatchResult, 0, batchSize)
+		batchTimer := time.NewTicker(2 * time.Second)
+		defer batchTimer.Stop()
+
+		flushBatch := func() {
+			if len(batch) == 0 {
+				return
+			}
+			// Convert to database types
+			statusBatch := make([]database.ProxyResultBatch, len(batch))
+			logBatch := make([]database.CheckLogBatch, len(batch))
+			for i, r := range batch {
+				status := database.StatusAlive
+				if !r.Alive {
+					status = database.StatusDead
+				}
+				statusBatch[i] = database.ProxyResultBatch{
+					ID:      r.ID,
+					Alive:   r.Alive,
+					Type:    r.Type,
+					Latency: r.Latency,
+				}
+				logBatch[i] = database.CheckLogBatch{
+					ProxyID:  r.ID,
+					Status:   status,
+					Latency:  r.Latency,
+					ErrorMsg: r.Error,
+				}
+			}
+			// Batch update proxies
+			if err := database.UpdateProxyStatusBatch(s.db, statusBatch); err != nil {
+				log.Printf("Scheduler: Batch update error: %v", err)
+			}
+			// Batch insert check logs
+			if err := database.InsertCheckLogBatch(s.db, logBatch); err != nil {
+				log.Printf("Scheduler: Batch log insert error: %v", err)
+			}
+			log.Printf("Scheduler: Batch write completed - %d records", len(batch))
+			batch = batch[:0] // Clear batch
+		}
+
+		for {
+			select {
+			case result, ok := <-resultChan:
+				if !ok {
+					// Channel closed, flush remaining
+					flushBatch()
+					return
+				}
+				// Add to batch
+				batch = append(batch, BatchResult{
+					ID:      result.ID,
+					Address: result.Address,
+					Alive:   result.Alive,
+					Type:    result.Type,
+					Latency: result.Latency,
+					Error:   result.Error,
+				})
+				// Flush when batch is full
+				if len(batch) >= batchSize {
+					flushBatch()
+				}
+			case <-batchTimer.C:
+				// Flush every 2 seconds (for progress visibility)
+				flushBatch()
+			}
+		}
+	}()
+
+	// Result collector for UI updates (non-blocking)
 	resultDone := make(chan struct{})
 	var alive, dead, processed int
 	var mu sync.Mutex
 
-	// Start result collector in a goroutine BEFORE submitting jobs
-	// This prevents deadlock: workers can send results while we submit jobs
 	go func() {
 		defer close(resultDone)
+		defer close(resultChan) // Signal batch writer to finish
 		progressInterval := 100
 		lastProgress := time.Now()
 
 		for result := range s.pool.Results() {
 			mu.Lock()
 			processed++
-			status := database.StatusDead
 			if result.Alive {
-				status = database.StatusAlive
 				alive++
 			} else {
 				dead++
@@ -275,19 +359,10 @@ func (s *Scheduler) runProxyCheck(proxies []database.Proxy, checkType string) {
 			currentDead := dead
 			mu.Unlock()
 
-			// Update proxy status
-			database.UpdateProxyStatus(s.db, result.ID, status, result.Type, result.Latency)
+			// Send to batch writer (non-blocking - channel is buffered)
+			resultChan <- result
 
-			// Log check
-			logEntry := database.CheckLog{
-				ProxyID: result.ID,
-				Status:  status,
-				Latency: result.Latency,
-				ErrorMsg: result.Error,
-			}
-			database.InsertCheckLog(s.db, logEntry)
-
-			// Update progress in struct
+			// Update UI progress instantly
 			s.progressMu.Lock()
 			s.progress.Processed = currentProcessed
 			s.progress.Alive = currentAlive
@@ -333,6 +408,9 @@ func (s *Scheduler) runProxyCheck(proxies []database.Proxy, checkType string) {
 
 	// Wait for result collector to finish
 	<-resultDone
+
+	// Wait for batch writer to finish
+	<-batchWriterDone
 
 	mu.Lock()
 	finalAlive := alive
