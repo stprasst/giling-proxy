@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
 	"strings"
 	"time"
 
@@ -105,7 +106,7 @@ func loadConfig(configPath string) (*config.Config, error) {
 }
 
 // ParseFlags parses CLI flags and returns the command to execute
-func ParseFlags() (command string, args map[string]string, workers int, timeout time.Duration, dbPath, configPath string) {
+func ParseFlags() (command string, args map[string]string, workers int, timeout time.Duration, dbPath, configPath string, daemon bool) {
 	// Define flags
 	addSources := flag.String("add-sources", "", "File containing source URLs to add")
 	listSources := flag.Bool("list-sources", false, "List all sources")
@@ -114,6 +115,7 @@ func ParseFlags() (command string, args map[string]string, workers int, timeout 
 	setSetting := flag.String("set", "", "Set a setting (key=value)")
 	checkAlive := flag.Bool("check-alive", false, "Re-check alive proxies only")
 	checkAll := flag.Bool("check-all", false, "Full scrape and check cycle")
+	daemonFlag := flag.Bool("daemon", false, "Run as daemon (CLI + cron, no web server)")
 	workersFlag := flag.Int("workers", 0, "Worker count (override)")
 	timeoutFlag := flag.Duration("timeout", 0, "Check timeout (override)")
 	dbPathFlag := flag.String("db", "", "Database path (override)")
@@ -149,6 +151,9 @@ func ParseFlags() (command string, args map[string]string, workers int, timeout 
 	}
 	if *checkAll {
 		command = "check-all"
+	}
+	if *daemonFlag {
+		command = "daemon"
 	}
 
 	workers = *workersFlag
@@ -336,6 +341,27 @@ func (c *Commands) Close() {
 	if c.db != nil {
 		c.db.Close()
 	}
+}
+
+// RunDaemon starts the scheduler in daemon mode (CLI + cron, no web server)
+func (c *Commands) RunDaemon() error {
+	log.Println("Starting daemon mode (CLI + scheduler, no web server)...")
+	log.Printf("Workers: %d, Timeout: %v", c.workerCount, c.checkTimeout)
+	log.Println("Scheduler running. Press Ctrl+C to stop.")
+
+	// Start scheduler
+	c.scheduler.Start()
+	defer c.scheduler.Stop()
+
+	// Setup signal handler for graceful shutdown
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, os.Interrupt)
+
+	// Wait for interrupt
+	<-quit
+	log.Println("Shutting down daemon...")
+
+	return nil
 }
 
 // WorkerCount returns the worker count

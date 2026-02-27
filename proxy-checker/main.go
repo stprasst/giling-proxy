@@ -25,7 +25,7 @@ import (
 
 func main() {
 	// Parse CLI flags
-	command, args, workersFlag, timeoutFlag, dbPathFlag, configPath := cli.ParseFlags()
+	command, args, workersFlag, timeoutFlag, dbPathFlag, configPath, _ := cli.ParseFlags()
 
 	// Execute CLI command if provided
 	if command != "" {
@@ -84,6 +84,9 @@ func runCLI(command string, args map[string]string, workers int, timeout time.Du
 
 	case "check-all":
 		return cmd.CheckAll()
+
+	case "daemon":
+		return cmd.RunDaemon()
 
 	default:
 		return fmt.Errorf("unknown command: %s", command)
