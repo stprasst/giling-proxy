@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
 
+	"proxy-checker/internal/cli"
 	"proxy-checker/internal/config"
 	"proxy-checker/internal/database"
 	"proxy-checker/internal/handlers"
@@ -22,6 +24,74 @@ import (
 )
 
 func main() {
+	// Parse CLI flags
+	command, args, workersFlag, timeoutFlag, dbPathFlag, configPath := cli.ParseFlags()
+
+	// Execute CLI command if provided
+	if command != "" {
+		if err := runCLI(command, args, workersFlag, timeoutFlag, dbPathFlag, configPath); err != nil {
+			log.Fatalf("Error: %v", err)
+		}
+		return
+	}
+
+	// Default: Run GUI server
+	runServer(dbPathFlag, configPath, workersFlag, timeoutFlag)
+}
+
+// runCLI executes CLI commands
+func runCLI(command string, args map[string]string, workers int, timeout time.Duration, dbPath, configPath string) error {
+	// Default paths
+	if dbPath == "" {
+		dbPath = "data/proxy.db"
+	}
+
+	// Initialize CLI commands
+	cmd, err := cli.NewCommands(dbPath, configPath, workers, timeout)
+	if err != nil {
+		return fmt.Errorf("failed to initialize: %w", err)
+	}
+	defer cmd.Close()
+
+	// Execute command
+	switch command {
+	case "add-sources":
+		file, ok := args["file"]
+		if !ok {
+			return fmt.Errorf("--add-sources requires a file path")
+		}
+		return cmd.AddSources(file)
+
+	case "list-sources":
+		return cmd.ListSources()
+
+	case "refresh-sources":
+		return cmd.RefreshSources()
+
+	case "get-settings":
+		return cmd.GetSettings()
+
+	case "set-setting":
+		key, ok1 := args["key"]
+		value, ok2 := args["value"]
+		if !ok1 || !ok2 {
+			return fmt.Errorf("--set requires key=value")
+		}
+		return cmd.SetSetting(key, value)
+
+	case "check-alive":
+		return cmd.CheckAlive()
+
+	case "check-all":
+		return cmd.CheckAll()
+
+	default:
+		return fmt.Errorf("unknown command: %s", command)
+	}
+}
+
+// runServer starts the web server
+func runServer(dbPathFlag, configPath string, workersFlag int, timeoutFlag time.Duration) {
 	// Load configuration
 	cfg, err := config.Load()
 	if err != nil {
