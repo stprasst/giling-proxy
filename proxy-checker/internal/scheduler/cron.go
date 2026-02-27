@@ -60,6 +60,7 @@ func NewScheduler(db *sql.DB, cfg *config.Config, checker *services.ProxyChecker
 		scrapeInterval: time.Hour, // Default: scrape every 60 min
 		checkTimeout:  cfg.CheckTimeout,
 		nextCheck:     time.Now().Add(cfg.CheckInterval),
+		nextScrape:    time.Now().Add(time.Hour), // Default: scrape every 60 min
 	}
 }
 
