@@ -46,9 +46,15 @@
                     </div>
                 </div>
                 <!-- Countdown (shown when idle) -->
-                <div id="countdown-container" class="text-sm text-gray-600">
-                    <span class="font-medium">Next refresh:</span>
-                    <span id="countdown" class="font-mono text-primary">--:--</span>
+                <div id="countdown-container" class="text-sm text-gray-600 flex items-center gap-4">
+                    <div>
+                        <span class="font-medium">Next Check:</span>
+                        <span id="countdown" class="font-mono text-primary">--:--</span>
+                    </div>
+                    <div>
+                        <span class="font-medium">Next Scrape:</span>
+                        <span id="countdown-scrape" class="font-mono text-success">--:--</span>
+                    </div>
                 </div>
                 <a href="/logout" class="text-gray-500 hover:text-danger transition">Logout</a>
             </div>
@@ -390,7 +396,8 @@
 let currentPage = 1;
 let currentStatus = '';
 let currentType = '';
-let nextRefreshTime = null;
+let nextCheckTime = null;
+let nextScrapeTime = null;
 let countdownInterval = null;
 let progressInterval = null;
 
@@ -450,20 +457,29 @@ async function api(url, options = {}) {
 }
 
 // Countdown timer
-function startCountdown(seconds) {
-    nextRefreshTime = Date.now() + seconds * 1000;
+function startCountdown(checkSeconds, scrapeSeconds) {
+    nextCheckTime = Date.now() + checkSeconds * 1000;
+    nextScrapeTime = Date.now() + scrapeSeconds * 1000;
 
     if (countdownInterval) clearInterval(countdownInterval);
 
     countdownInterval = setInterval(() => {
-        const remaining = Math.max(0, Math.floor((nextRefreshTime - Date.now()) / 1000));
-        const mins = Math.floor(remaining / 60);
-        const secs = remaining % 60;
+        // Update check countdown
+        const checkRemaining = Math.max(0, Math.floor((nextCheckTime - Date.now()) / 1000));
+        const checkMins = Math.floor(checkRemaining / 60);
+        const checkSecs = checkRemaining % 60;
         document.getElementById('countdown').textContent =
-            `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+            `${checkMins.toString().padStart(2, '0')}:${checkSecs.toString().padStart(2, '0')}`;
 
-        if (remaining <= 0) {
-            // Fetch new countdown from server
+        // Update scrape countdown
+        const scrapeRemaining = Math.max(0, Math.floor((nextScrapeTime - Date.now()) / 1000));
+        const scrapeMins = Math.floor(scrapeRemaining / 60);
+        const scrapeSecs = scrapeRemaining % 60;
+        document.getElementById('countdown-scrape').textContent =
+            `${scrapeMins.toString().padStart(2, '0')}:${scrapeSecs.toString().padStart(2, '0')}`;
+
+        // Refresh when countdown reaches 0
+        if (checkRemaining <= 0 || scrapeRemaining <= 0) {
             fetchCountdown();
             refreshStats();
         }
@@ -498,10 +514,12 @@ async function fetchCountdown() {
             }
 
             // Handle countdown
-            if (data.next_check) {
-                const nextCheck = new Date(data.next_check);
-                const seconds = Math.max(0, Math.floor((nextCheck - Date.now()) / 1000));
-                startCountdown(seconds);
+            if (data.next_check || data.next_scrape) {
+                const nextCheck = data.next_check ? new Date(data.next_check) : new Date(Date.now() + 15 * 60 * 1000);
+                const nextScrape = data.next_scrape ? new Date(data.next_scrape) : new Date(Date.now() + 60 * 60 * 1000);
+                const checkSeconds = Math.max(0, Math.floor((nextCheck - Date.now()) / 1000));
+                const scrapeSeconds = Math.max(0, Math.floor((nextScrape - Date.now()) / 1000));
+                startCountdown(checkSeconds, scrapeSeconds);
             }
 
             // Update settings display if available
@@ -510,8 +528,8 @@ async function fetchCountdown() {
             }
         }
     } catch (e) {
-        // Fallback to 20 minutes on error
-        startCountdown(20 * 60);
+        // Fallback to 15 minutes and 60 minutes on error
+        startCountdown(15 * 60, 60 * 60);
     }
 }
 

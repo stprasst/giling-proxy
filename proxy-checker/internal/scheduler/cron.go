@@ -25,7 +25,8 @@ type Scheduler struct {
 	mu            sync.Mutex
 	running       bool
 	lastCheck     time.Time
-	nextCheck     time.Time
+	nextCheck     time.Time // Next alive re-check
+	nextScrape    time.Time // Next scrape+check
 	checkInterval time.Duration
 	scrapeInterval time.Duration
 	checkTimeout  time.Duration
@@ -85,9 +86,10 @@ func (s *Scheduler) SetupJobs() error {
 	checkSOCKS5 := checkSOCKS5Str == "true" || checkSOCKS5Str == "1"
 	s.checker.SetProtocolSettings(checkSOCKS4, checkSOCKS5)
 
-	// Update initial next_check time so countdown displays correctly
+	// Update initial next_check times so countdowns display correctly
 	s.mu.Lock()
 	s.nextCheck = time.Now().Add(s.checkInterval)
+	s.nextScrape = time.Now().Add(s.scrapeInterval)
 	s.mu.Unlock()
 
 	// Job 1: Re-check alive proxies every check_interval (default 15 min)
@@ -145,7 +147,7 @@ func (s *Scheduler) checkAliveProxies() {
 		s.mu.Lock()
 		s.running = false
 		s.lastCheck = time.Now()
-		s.nextCheck = time.Now().Add(s.checkInterval)
+		s.nextCheck = time.Now().Add(s.checkInterval) // Next alive re-check
 		s.mu.Unlock()
 
 		// Clear progress after a delay
@@ -200,7 +202,7 @@ func (s *Scheduler) scrapeAndCheck() {
 		s.mu.Lock()
 		s.running = false
 		s.lastCheck = time.Now()
-		s.nextCheck = time.Now().Add(s.scrapeInterval)
+		s.nextScrape = time.Now().Add(s.scrapeInterval) // Next scrape+check
 		s.mu.Unlock()
 
 		// Clear progress after a delay
@@ -486,35 +488,13 @@ func (s *Scheduler) scrapeAllSources() {
 
 // TriggerCheck manually triggers a full scrape and check cycle
 func (s *Scheduler) TriggerCheck() {
-	// Read interval from database
-	intervalStr := database.GetSettingWithDefault(s.db, "check_interval", "15m")
-	if interval, err := time.ParseDuration(intervalStr); err == nil {
-		s.mu.Lock()
-		s.checkInterval = interval
-		s.nextCheck = time.Now().Add(interval)
-		s.mu.Unlock()
-	} else {
-		s.mu.Lock()
-		s.nextCheck = time.Now().Add(s.checkInterval)
-		s.mu.Unlock()
-	}
+	// Manual trigger does NOT update countdown - only scheduled jobs update countdown
 	go s.scrapeAndCheck()
 }
 
 // TriggerAliveCheck manually triggers an alive-only re-check
 func (s *Scheduler) TriggerAliveCheck() {
-	// Read interval from database
-	intervalStr := database.GetSettingWithDefault(s.db, "check_interval", "15m")
-	if interval, err := time.ParseDuration(intervalStr); err == nil {
-		s.mu.Lock()
-		s.checkInterval = interval
-		s.nextCheck = time.Now().Add(interval)
-		s.mu.Unlock()
-	} else {
-		s.mu.Lock()
-		s.nextCheck = time.Now().Add(s.checkInterval)
-		s.mu.Unlock()
-	}
+	// Manual trigger does NOT update countdown - only scheduled jobs update countdown
 	go s.checkAliveProxies()
 }
 
@@ -524,6 +504,7 @@ func (s *Scheduler) GetStatus() map[string]interface{} {
 	running := s.running
 	lastCheck := s.lastCheck
 	nextCheck := s.nextCheck
+	nextScrape := s.nextScrape
 	checkInterval := s.checkInterval
 	s.mu.Unlock()
 
@@ -539,6 +520,7 @@ func (s *Scheduler) GetStatus() map[string]interface{} {
 		"running":        running,
 		"last_check":     lastCheck,
 		"next_check":     nextCheck,
+		"next_scrape":    nextScrape,
 		"check_interval": checkInterval.Seconds(),
 		// Database settings
 		"settings_interval": intervalStr,

@@ -380,6 +380,7 @@ nohup ./proxy-checker --daemon > proxy-checker.log 2>&1 &
 - Stop with Ctrl+C
 
 **Mode comparison:**
+
 | Mode | GUI | Scheduler | Use Case |
 |------|-----|-----------|----------|
 | `proxy-checker` | ✅ | ✅ | Full web management |
