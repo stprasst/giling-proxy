@@ -8,17 +8,20 @@
   - Every 15 min: Re-check alive proxies
   - Every 60 min: Scrape sources + check all proxies (alive + new)
 - **Automatic Dead Proxy Removal** - Delete failed proxies after each check
-- **Multi-Protocol Support** - HTTP, HTTPS, SOCKS4, SOCKS5
+- **Multi-Protocol Support** - HTTP, HTTPS, SOCKS4, SOCKS5 (with toggle switches)
+- **Check Alive Only** - Manually re-check only alive proxies and update exports
+- **High-Performance Checking** - Async batch writer with 500+ workers support
 - **Export by Type** - Separate export files for each proxy type
-- **Settings Management** - Configure intervals, workers, timeout via web UI
+- **Settings Management** - Configure intervals, workers, timeout, protocols via web UI
 - **Progress Tracking** - Real-time progress indicator during checks
 
 ## Tech Stack
 
 - **Backend:** Go 1.21+ with Gin framework
-- **Database:** SQLite with WAL mode
+- **Database:** SQLite with WAL mode + async batch writer
 - **Frontend:** HTML templates with Tailwind CSS
 - **Scheduler:** robfig/cron v3
+- **Concurrency:** Worker pool with 500+ workers support
 
 ## Quick Start (Windows)
 
@@ -264,11 +267,15 @@ Default credentials (change .env first):
 Access Settings tab to configure:
 - **Check Interval (Alive Proxies):** How often to re-check alive proxies (default: 15m)
 - **Scrape Interval:** How often to scrape + check all proxies (default: 60m)
-- **Worker Count:** Number of concurrent workers (default: 100)
+- **Worker Count:** Number of concurrent workers (default: 100, max: 500)
 - **Check Timeout:** Timeout per proxy check (default: 10s)
 - **Test URLs:** Comma-separated test URLs
+- **Check SOCKS4:** Enable/disable SOCKS4 protocol checking (default: enabled)
+- **Check SOCKS5:** Enable/disable SOCKS5 protocol checking (default: enabled)
 
-> **Note:** Settings changes require application restart to take effect.
+> **Note:**
+> - **Worker Count, Check Interval, Scrape Interval** require application restart
+> - **Check Timeout, Test URLs, Protocol settings** take effect immediately on next check
 
 ## Usage
 
@@ -282,6 +289,7 @@ Access Settings tab to configure:
 ### Manual Actions
 
 - **Refresh All Sources:** Scrape all sources immediately
+- **Check Alive Proxies Only:** Re-check only alive proxies and update exports
 - **Check All Proxies Now:** Run full scrape + check cycle
 - **View Exports:** Access proxy lists by type
 
@@ -358,9 +366,10 @@ sudo systemctl start proxy-checker
 
 ### Workers not processing
 
-1. Check Settings tab → Worker Count (default: 100)
-2. Restart application after changing settings
+1. Check Settings tab → Worker Count (default: 100, max: 500)
+2. Restart application after changing worker count
 3. Check logs for "WorkerPool: Starting X workers"
+4. With 500 workers, expect ~100 checks/sec (network timeout is the bottleneck)
 
 ### Settings not being applied
 
@@ -368,6 +377,20 @@ Settings are read **only at startup**. Restart the application after changing:
 - Check Interval
 - Scrape Interval
 - Worker Count
+
+These settings take effect **immediately** (no restart needed):
+- Check Timeout
+- Test URLs
+- Check SOCKS4 / Check SOCKS5
+
+### Checking appears slow with 500 workers
+
+This is expected behavior. Each proxy check tests 4 protocols (HTTP, HTTPS, SOCKS4, SOCKS5) with 10s timeout:
+- Worst case: ~40 seconds per proxy
+- Theoretical max: ~50 checks/sec with 500 workers
+- Actual: ~100 checks/sec (better than expected due to early exit)
+
+To speed up, reduce timeout or disable unused protocols in Settings.
 
 ## Development
 
