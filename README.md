@@ -11,8 +11,10 @@
 - **Multi-Protocol Support** - HTTP, HTTPS, SOCKS4, SOCKS5 (with toggle switches)
 - **Check Alive Only** - Manually re-check only alive proxies and update exports
 - **High-Performance Checking** - Async batch writer with 500+ workers support
+- **CLI Mode** - Full command-line interface for server-only operations
+- **Web UI** - User-friendly dashboard for management
 - **Export by Type** - Separate export files for each proxy type
-- **Settings Management** - Configure intervals, workers, timeout, protocols via web UI
+- **Settings Management** - Configure intervals, workers, timeout, protocols via web UI or CLI
 - **Progress Tracking** - Real-time progress indicator during checks
 
 ## Tech Stack
@@ -305,32 +307,86 @@ Located in `data/public/`:
 
 Access via: `http://your-server:8080/public/proxy_alive.txt`
 
+## CLI Usage (Server-Only Mode)
+
+For users who prefer command-line over web UI, the application supports full CLI mode:
+
+```bash
+# Show all available flags
+proxy-checker --help
+
+# List all sources
+proxy-checker --list-sources
+
+# Add sources from file (one URL per line)
+proxy-checker --add-sources sources.txt
+
+# Refresh all sources
+proxy-checker --refresh-sources
+
+# Get all settings
+proxy-checker --get-settings
+
+# Update a setting
+proxy-checker --set check_interval=20m
+proxy-checker --set worker_count=200
+
+# Re-check alive proxies only
+proxy-checker --check-alive
+
+# Full scrape and check cycle
+proxy-checker --check-all
+
+# With custom options
+proxy-checker --check-all --workers 300 --timeout 5s --db /path/to/proxy.db
+```
+
+### CLI Flags
+
+| Flag | Description |
+|------|-------------|
+| `--add-sources file` | Add sources from file |
+| `--list-sources` | List all sources |
+| `--refresh-sources` | Refresh all sources |
+| `--get-settings` | Get all settings |
+| `--set key=value` | Update a setting |
+| `--check-alive` | Re-check alive proxies only |
+| `--check-all` | Full scrape + check cycle |
+| `--workers N` | Override worker count |
+| `--timeout D` | Override check timeout |
+| `--db path` | Override database path |
+| `--config path` | Config file path (default: .env) |
+
+**Default behavior:** Running `proxy-checker` without any flags starts the web server (GUI mode).
+
 ## Project Structure
 
 ```
 proxy-checker/
-├── main.go                 # Entry point
+├── main.go                 # Entry point (CLI + GUI)
 ├── internal/
-│   ├── config/            # Configuration loader
-│   ├── database/          # Database layer (SQLite, migrations)
-│   ├── handlers/          # HTTP handlers
-│   │   ├── auth.go        # Authentication
-│   │   ├── check.go       # Check endpoints
-│   │   ├── proxy.go       # Proxy CRUD
-│   │   ├── settings.go    # Settings management
-│   │   └── source.go      # Source management
-│   ├── scheduler/         # Cron scheduler (dual-schedule)
-│   └── services/          # Business logic
-│       ├── checker.go     # Proxy validation
-│       ├── exporter.go    # File export
-│       ├── scraper.go     # Source scraping
-│       └── worker_pool.go # Concurrent checking
-├── static/                # CSS assets
-├── templates/             # HTML templates
-├── deploy/                # Deployment scripts
-│   ├── install.sh         # Linux deployment script
+│   ├── cli/                # CLI command handlers
+│   │   └── cli.go          # CLI mode implementation
+│   ├── config/             # Configuration loader
+│   ├── database/           # Database layer (SQLite, migrations)
+│   ├── handlers/           # HTTP handlers
+│   │   ├── auth.go         # Authentication
+│   │   ├── check.go        # Check endpoints
+│   │   ├── proxy.go        # Proxy CRUD
+│   │   ├── settings.go     # Settings management
+│   │   └── source.go       # Source management
+│   ├── scheduler/          # Cron scheduler (dual-schedule)
+│   └── services/           # Business logic
+│       ├── checker.go      # Proxy validation
+│       ├── exporter.go     # File export
+│       ├── scraper.go      # Source scraping
+│       └── worker_pool.go  # Concurrent checking
+├── static/                 # CSS assets
+├── templates/              # HTML templates
+├── deploy/                 # Deployment scripts
+│   ├── install.sh          # Linux deployment script
 │   └── proxy-checker.service  # Systemd service
-└── data/                  # Runtime data (database, exports)
+└── data/                   # Runtime data (database, exports)
 ```
 
 ## Troubleshooting
