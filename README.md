@@ -345,6 +345,7 @@ proxy-checker --check-all --workers 300 --timeout 5s --db /path/to/proxy.db
 
 | Flag | Description |
 |------|-------------|
+| `--daemon` | Run as daemon (CLI + scheduler, no web server) |
 | `--add-sources file` | Add sources from file |
 | `--list-sources` | List all sources |
 | `--refresh-sources` | Refresh all sources |
@@ -356,6 +357,34 @@ proxy-checker --check-all --workers 300 --timeout 5s --db /path/to/proxy.db
 | `--timeout D` | Override check timeout |
 | `--db path` | Override database path |
 | `--config path` | Config file path (default: .env) |
+
+### Daemon Mode
+
+Run the application without web GUI but with automatic scheduled checks:
+
+```bash
+# Start daemon mode (CLI + cron, no web server)
+proxy-checker --daemon
+
+# With custom options
+proxy-checker --daemon --workers 300 --timeout 5s
+
+# Run in background (Linux)
+nohup ./proxy-checker --daemon > proxy-checker.log 2>&1 &
+```
+
+**Daemon mode features:**
+- No web server (lightweight)
+- Scheduler running (auto-check every 15min + 60min)
+- Console logging
+- Stop with Ctrl+C
+
+**Mode comparison:**
+| Mode | GUI | Scheduler | Use Case |
+|------|-----|-----------|----------|
+| `proxy-checker` | ✅ | ✅ | Full web management |
+| `--daemon` | ❌ | ✅ | Server-only, auto-running |
+| `--check-all` | ❌ | ❌ | One-time manual check |
 
 **Default behavior:** Running `proxy-checker` without any flags starts the web server (GUI mode).
 
