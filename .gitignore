@@ -9,7 +9,12 @@ plans/
 *.db
 *.db-shm
 *.db-wal
-data/
+data/*.db
+data/*.db-shm
+data/*.db-wal
+# But allow export files
+!data/public/
+!data/public/*.txt
 
 # Logs
 *.log
