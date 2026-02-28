@@ -1,6 +1,6 @@
 # Proxy Alive List (Full Format)
 # Format: ip:port:type latency_ms
-# Generated: 2026-03-01T00:37:36+07:00
+# Generated: 2026-03-01T00:37:38+07:00
 # Total: 382 proxies
 
 # http proxies (152)
