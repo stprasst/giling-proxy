@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -100,8 +101,9 @@ func (s *Scheduler) SetupJobs() error {
 	s.mu.Unlock()
 
 	// Job 1: Re-check alive proxies every check_interval (default 15 min)
-	checkCronExpr := "@every " + s.checkInterval.String()
+	checkCronExpr := "@every " + formatDurationForCron(s.checkInterval)
 	_, err := s.cron.AddFunc(checkCronExpr, func() {
+		log.Println("Scheduler: Scheduled job 're-check alive' triggered")
 		s.checkAliveProxies()
 	})
 	if err != nil {
@@ -109,8 +111,9 @@ func (s *Scheduler) SetupJobs() error {
 	}
 
 	// Job 2: Scrape sources + check new proxies every scrape_interval (default 60 min)
-	scrapeCronExpr := "@every " + s.scrapeInterval.String()
+	scrapeCronExpr := "@every " + formatDurationForCron(s.scrapeInterval)
 	_, err = s.cron.AddFunc(scrapeCronExpr, func() {
+		log.Println("Scheduler: Scheduled job 'scrape+check' triggered")
 		s.scrapeAndCheck()
 	})
 	if err != nil {
@@ -554,4 +557,16 @@ func calculatePercent(processed, total int) float64 {
 		return 0
 	}
 	return float64(processed) / float64(total) * 100
+}
+
+// formatDurationForCron converts duration to cron-compatible format
+// Converts 1h0m0s -> 1h, 15m0s -> 15m, etc.
+func formatDurationForCron(d time.Duration) string {
+	// Convert to minutes for simplicity
+	minutes := int(d.Minutes())
+	if minutes >= 60 && minutes%60 == 0 {
+		hours := minutes / 60
+		return fmt.Sprintf("%dh", hours)
+	}
+	return fmt.Sprintf("%dm", minutes)
 }
