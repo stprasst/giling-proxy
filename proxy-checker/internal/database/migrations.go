@@ -120,6 +120,14 @@ var migrations = []Migration{
 				('check_socks5', 'true', 'Enable SOCKS5 protocol checking');
 		`,
 	},
+	{
+		Name: "009_add_auto_git_push_setting",
+		SQL: `
+			-- Add auto git push setting
+			INSERT OR IGNORE INTO settings (key, value, description) VALUES
+				('auto_git_push', 'false', 'Automatically commit and push export files to GitHub after each check');
+		`,
+	},
 }
 
 // RunMigrations executes all pending migrations

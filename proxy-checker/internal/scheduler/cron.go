@@ -21,6 +21,7 @@ type Scheduler struct {
 	pool          *services.WorkerPool
 	scraper       *services.Scraper
 	exporter      *services.Exporter
+	gitHelper     *services.GitHelper
 	config        *config.Config
 	mu            sync.Mutex
 	running       bool
@@ -46,6 +47,10 @@ type CheckProgress struct {
 
 // NewScheduler creates a new scheduler
 func NewScheduler(db *sql.DB, cfg *config.Config, checker *services.ProxyChecker, pool *services.WorkerPool, scraper *services.Scraper, exporter *services.Exporter) *Scheduler {
+	// Check if auto git push is enabled
+	autoGitPushStr := database.GetSettingWithDefault(db, "auto_git_push", "false")
+	autoGitPush := autoGitPushStr == "true" || autoGitPushStr == "1"
+
 	return &Scheduler{
 		cron: cron.New(cron.WithChain(
 			cron.Recover(cron.DefaultLogger),
@@ -55,6 +60,7 @@ func NewScheduler(db *sql.DB, cfg *config.Config, checker *services.ProxyChecker
 		pool:          pool,
 		scraper:       scraper,
 		exporter:      exporter,
+		gitHelper:     services.NewGitHelper(".", autoGitPush),
 		config:        cfg,
 		checkInterval: cfg.CheckInterval,
 		scrapeInterval: time.Hour, // Default: scrape every 60 min
@@ -443,6 +449,13 @@ func (s *Scheduler) runProxyCheck(proxies []database.Proxy, checkType string) {
 		log.Printf("Scheduler: Export error: %v", err)
 	} else {
 		log.Println("Scheduler: Exported alive proxies (all formats)")
+	}
+
+	// Auto commit and push to git if enabled
+	if err := s.gitHelper.CommitAndPush("Update proxy exports"); err != nil {
+		log.Printf("Scheduler: Git push error: %v", err)
+	} else {
+		log.Println("Scheduler: Committed and pushed to git")
 	}
 }
 
