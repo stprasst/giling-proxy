@@ -306,6 +306,19 @@ Located in `data/public/`:
 
 Access via: `http://your-server:8080/public/proxy_alive.txt`
 
+## Live Proxy Lists
+
+These URLs link directly to the raw, automatically-updated proxy lists. You can integrate them right into your projects.
+
+**Working Proxies (Checked and Recommended):**
+- **All Protocols:** https://raw.githubusercontent.com/stprasst/giling-proxy/refs/heads/main/proxy-checker/data/public/proxy_alive.txt
+- **HTTP:** https://raw.githubusercontent.com/stprasst/giling-proxy/refs/heads/main/proxy-checker/data/public/proxy_alive_http.txt
+- **HTTPS:** https://raw.githubusercontent.com/stprasst/giling-proxy/refs/heads/main/proxy-checker/data/public/proxy_alive_https.txt
+- **SOCKS4:** https://raw.githubusercontent.com/stprasst/giling-proxy/refs/heads/main/proxy-checker/data/public/proxy_alive_socks4.txt
+- **SOCKS5:** https://raw.githubusercontent.com/stprasst/giling-proxy/refs/heads/main/proxy-checker/data/public/proxy_alive_socks5.txt
+
+> **Note:** These files are automatically updated after each proxy check cycle. Update frequency depends on your configured intervals (default: every 15 minutes for alive re-checks, every 60 minutes for full scrape + check).
+
 ## CLI Usage (Server-Only Mode)
 
 For users who prefer command-line over web UI, the application supports full CLI mode:
@@ -504,6 +517,10 @@ GOOS=linux GOARCH=amd64 go build -o proxy-checker .
 # With optimizations
 go build -ldflags="-s -w" -o proxy-checker .
 ```
+
+## Notice
+
+I do not host the provided proxies. The code is designed to only collect publicly listed proxies from websites and check if they are working. Remember that some public proxies are intentionally malicious, so never send your passwords or any sensitive data while connected to any public proxy to be safe. I built this tool to make it easier for developers and power-users to access resources for building/creating things, because I believe skill and talent shouldn't be wasted by no budget. I condemn malicious use, please use proxies responsibly.
 
 ## License
 
