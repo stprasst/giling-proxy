@@ -290,9 +290,8 @@ Access Settings tab to configure:
 
 ### Manual Actions
 
-- **Refresh All Sources:** Scrape all sources immediately
 - **Check Alive Proxies Only:** Re-check only alive proxies and update exports
-- **Check All Proxies Now:** Run full scrape + check cycle
+- **Scrape & Check All Proxies Now:** Run full scrape + check cycle
 - **View Exports:** Access proxy lists by type
 
 ### Export Files
@@ -321,15 +320,13 @@ proxy-checker --list-sources
 # Add sources from file (one URL per line)
 proxy-checker --add-sources sources.txt
 
-# Refresh all sources
-proxy-checker --refresh-sources
-
 # Get all settings
 proxy-checker --get-settings
 
 # Update a setting
 proxy-checker --set check_interval=20m
 proxy-checker --set worker_count=200
+proxy-checker --set auto_git_push=true
 
 # Re-check alive proxies only
 proxy-checker --check-alive
@@ -348,7 +345,6 @@ proxy-checker --check-all --workers 300 --timeout 5s --db /path/to/proxy.db
 | `--daemon` | Run as daemon (CLI + scheduler, no web server) |
 | `--add-sources file` | Add sources from file |
 | `--list-sources` | List all sources |
-| `--refresh-sources` | Refresh all sources |
 | `--get-settings` | Get all settings |
 | `--set key=value` | Update a setting |
 | `--check-alive` | Re-check alive proxies only |
