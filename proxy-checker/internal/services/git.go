@@ -65,22 +65,35 @@ func (g *GitHelper) isGitRepo() bool {
 
 // hasChanges checks if there are uncommitted changes
 func (g *GitHelper) hasChanges() bool {
-	cmd := exec.Command("git", "-C", g.repoDir, "status", "--porcelain", "data/public/")
-	output, err := cmd.Output()
-	if err != nil {
-		return false
+	// Check both root and subdirectory paths
+	paths := []string{"proxy-checker/data/public/", "data/public/"}
+	for _, path := range paths {
+		cmd := exec.Command("git", "-C", g.repoDir, "status", "--porcelain", path)
+		output, err := cmd.Output()
+		if err != nil {
+			continue
+		}
+		if strings.TrimSpace(string(output)) != "" {
+			return true
+		}
 	}
-	return strings.TrimSpace(string(output)) != ""
+	return false
 }
 
 // gitAdd stages files for commit
 func (g *GitHelper) gitAdd(path string) error {
-	cmd := exec.Command("git", "-C", g.repoDir, "add", path)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("%s: %s", err, string(output))
+	// Try both possible paths
+	paths := []string{path, "proxy-checker/" + path}
+	for _, p := range paths {
+		cmd := exec.Command("git", "-C", g.repoDir, "add", p)
+		_, err := cmd.CombinedOutput()
+		if err != nil {
+			// Try next path
+			continue
+		}
+		return nil
 	}
-	return nil
+	return fmt.Errorf("failed to add files from any path")
 }
 
 // gitCommit creates a commit
