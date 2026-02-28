@@ -112,14 +112,11 @@
 
                 <!-- Actions -->
                 <div class="mb-6 flex flex-wrap gap-2">
-                    <button onclick="refreshAllSources()" class="bg-success text-white px-4 py-2 rounded-lg hover:bg-green-600 transition text-sm">
-                        Refresh All Sources
-                    </button>
                     <button onclick="triggerCheckAlive()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition text-sm">
                         Check Alive Proxies Only
                     </button>
                     <button onclick="triggerCheck()" class="bg-warning text-white px-4 py-2 rounded-lg hover:bg-yellow-600 transition text-sm">
-                        Check All Proxies Now
+                        Scrape & Check All Proxies Now
                     </button>
                     <a href="/public/proxy_alive.txt" target="_blank" class="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300 transition text-sm">
                         View All Alive
@@ -571,14 +568,6 @@ document.getElementById('source-form').addEventListener('submit', async (e) => {
         showToast(res.error, true);
     }
 });
-
-// Refresh all sources
-async function refreshAllSources() {
-    showToast('Refreshing all sources...');
-    const res = await api('/api/sources/refresh-all', { method: 'POST' });
-    showToast(res.message || res.error, !res.success);
-    if (res.success) setTimeout(() => location.reload(), 1500);
-}
 
 // Bulk add form
 document.getElementById('bulk-form').addEventListener('submit', async (e) => {
