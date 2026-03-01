@@ -1,11 +1,9 @@
 # Proxy Alive List (Full Format)
 # Format: ip:port:type latency_ms
-# Generated: 2026-03-01T19:52:25+07:00
+# Generated: 2026-03-01T20:00:46+07:00
 # Total: 2 proxies
 
-# http proxies (1)
-104.238.30.45:59741:http 1653
-
-# https proxies (1)
-120.26.0.11:8880:https 4312
+# http proxies (2)
+104.238.30.45:59741:http 1593
+120.26.0.11:8880:http 2034
 
