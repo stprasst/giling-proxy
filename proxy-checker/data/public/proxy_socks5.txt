@@ -1,4 +1,5 @@
 # Proxy socks5 List
-# Generated: 2026-03-01T15:21:41+07:00
-# Total: 0 proxies
+# Generated: 2026-03-01T15:22:32+07:00
+# Total: 1 proxies
 
+103.84.95.54:7890
