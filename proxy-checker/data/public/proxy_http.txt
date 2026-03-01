@@ -1,5 +1,6 @@
 # Proxy http List
-# Generated: 2026-03-01T16:36:41+07:00
-# Total: 1 proxies
+# Generated: 2026-03-01T16:37:33+07:00
+# Total: 2 proxies
 
 120.92.212.16:7890
+158.160.215.167:8126
