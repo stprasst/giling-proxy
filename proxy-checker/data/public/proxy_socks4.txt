@@ -1,5 +1,5 @@
 # Proxy socks4 List
-# Generated: 2026-03-01T11:38:32+07:00
+# Generated: 2026-03-01T11:39:24+07:00
 # Total: 2 proxies
 
 154.219.101.86:8888
