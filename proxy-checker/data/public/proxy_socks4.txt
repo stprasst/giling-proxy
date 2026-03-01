@@ -1,5 +1,4 @@
 # Proxy socks4 List
-# Generated: 2026-03-01T15:37:32+07:00
-# Total: 1 proxies
+# Generated: 2026-03-01T15:38:19+07:00
+# Total: 0 proxies
 
-150.107.140.238:3128
