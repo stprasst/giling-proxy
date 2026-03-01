@@ -1,11 +1,11 @@
 # Proxy Alive List (Full Format)
 # Format: ip:port:type latency_ms
-# Generated: 2026-03-01T16:37:36+07:00
+# Generated: 2026-03-01T16:45:45+07:00
 # Total: 2 proxies
 
-# socks4 proxies (1)
-109.95.220.45:8080:socks4 1854
+# http proxies (1)
+109.95.220.45:8080:http 843
 
 # socks5 proxies (1)
-184.181.217.194:4145:socks5 2423
+184.181.217.194:4145:socks5 1502
 
