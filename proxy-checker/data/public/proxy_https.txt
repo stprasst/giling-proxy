@@ -1,5 +1,6 @@
 # Proxy https List
-# Generated: 2026-03-01T14:51:09+07:00
-# Total: 1 proxies
+# Generated: 2026-03-01T14:51:41+07:00
+# Total: 2 proxies
 
-61.72.221.84:3128
+103.216.50.11:8080
+31.10.83.158:8080
